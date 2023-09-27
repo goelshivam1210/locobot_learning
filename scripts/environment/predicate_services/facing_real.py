@@ -25,7 +25,7 @@ class RealRobotFacing(object):
             "red": ((31, 37, 253), "object_1"),
             "green": ((0, 255, 0), "object_2"),
             "orange":((0, 165, 255), "object_3")
-        }
+        } # these needs to be loaded through the params later.
         rospy.loginfo("self.color_codes")
         self.object_positions = {v[1]: {} for k, v in self.color_codes.items()}
 
@@ -100,7 +100,7 @@ class RealRobotFacing(object):
             # rospy.loginfo(f"Threshold: {self.param_facing_thresh.get(obj, 0)}")
             
             # if angle < 0.25 and distance < self.param_facing_thresh.get(obj, 0):
-            if angle < 5:
+            if angle < 5: # set this value for now. Needs refining.
                 rospy.loginfo(f"Robot is facing {obj}.")
                 return FacingResponse(True)
             else:
