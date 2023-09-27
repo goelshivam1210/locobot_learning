@@ -181,7 +181,7 @@ include_directories(
 catkin_install_python(PROGRAMS 
   scripts/executor/grasp_pose_server.py
   scripts/executor/approach_server.py scripts/executor/tests/test_approach.py
-  scripts/executor/grasp_server.py scripts/executor/tests/test_grasp.py scripts/obtain_pick_item_pose.py 
+  scripts/executor/grasp_server.py scripts/executor/tests/test_grasp.py
   scripts/executor/universal_move_arm.py
   scripts/executor/place_server.py scripts/executor/tests/test_place.py
   scripts/executor/primitive_move_base_server.py scripts/executor/tests/test_primitive.py
