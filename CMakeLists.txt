@@ -69,6 +69,7 @@ add_service_files(
   Facing.srv
   Hold.srv
   PrimitiveBase.srv
+  AlignRobot.srv
 )
 
 ## Generate actions in the 'action' folder
