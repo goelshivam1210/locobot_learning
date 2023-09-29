@@ -7,7 +7,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, PointCloud2
 from locobot_learning.srv import Facing, FacingResponse
 import tf2_ros
-import tf2_geometry_msgs
+import tf2_geometry_msgs #pleasthis helps in the tf2 transform error and exception
 from geometry_msgs.msg import PointStamped
 from tf.transformations import euler_from_quaternion
 
@@ -34,7 +34,8 @@ class RealRobotFacing(object):
             "red": ((12, 33, 208), "red_ball"),
             "green": ((0, 255, 220), "green_ball"),
             "orange":((0, 150, 255), "orange_marker"),
-            "yellow":((0, 209, 243), "yellow_marker")
+            "yellow":((0, 209, 243), "yellow_marker"),
+            "blue":((112,100,0), "blue_ball")
         }
         
         self.object_positions = {v[1]: {} for k, v in self.color_codes.items()}
@@ -78,8 +79,8 @@ class RealRobotFacing(object):
         cx, cy = 321.1991882324219, 238.43983459472656  # Extracted principal points in x and y
         
         for color, (bgr, object_name) in self.color_codes.items():
-            lower_bound = np.array(bgr) - 40
-            upper_bound = np.array(bgr) + 40
+            lower_bound = np.array(bgr) - 50
+            upper_bound = np.array(bgr) + 50
             mask = cv2.inRange(hsv_image, lower_bound, upper_bound)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
@@ -99,7 +100,6 @@ class RealRobotFacing(object):
                 point_camera_frame.point.y = (cyi - cy) * depth / fy
                 point_camera_frame.point.z = depth
                 # rospy.loginfo(f"3D Position in Camera Frame: X: {point_camera_frame.point.x}, Y: {point_camera_frame.point.y}, Z: {point_camera_frame.point.z}")
-                
                 try:
                     point_map_frame = self.tf_buffer.transform(point_camera_frame, 'map', timeout=rospy.Duration(1.0))
                     self.object_positions[object_name] = point_map_frame.point
