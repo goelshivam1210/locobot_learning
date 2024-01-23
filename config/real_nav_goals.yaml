@@ -1,0 +1,41 @@
+real_nav_goals:
+  marker:
+    position:
+      x: -1.456
+      y: -0.637
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 1.000
+      w: 0.000
+  atdoor:
+    position:
+      x: -0.689
+      y: -0.421
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: -0.546
+      w: 0.838
+  postdoor:
+    position:
+      x: -0.320
+      y: -1.201
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: -0.545
+      w: 0.839
+  bin:
+    position:
+      x: 0.198
+      y: -1.413
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: -0.246
+      w: 0.969

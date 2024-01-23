@@ -35,7 +35,8 @@ class RealRobotFacing(object):
             "green": ((0, 255, 220), "green_ball"),
             "orange":((0, 150, 255), "orange_marker"),
             "yellow":((0, 209, 243), "yellow_marker"),
-            "blue":((112,100,0), "blue_ball")
+            "blue":((112,100,0), "blue_ball"),
+            "green":((55, 83, 28), "green_marker")
         }
         
         self.object_positions = {v[1]: {} for k, v in self.color_codes.items()}
@@ -94,9 +95,9 @@ class RealRobotFacing(object):
                     continue  # Skip invalid depth values
                 
                 point_camera_frame = PointStamped()
-                point_camera_frame.header.frame_id = 'locobot/camera_tower_link'
+                point_camera_frame.header.frame_id = 'locobot/camera_tower_link' # lik where the camera is mountd
                 
-                point_camera_frame.point.x = (cxi - cx) * depth / fx
+                point_camera_frame.point.x = (cxi - cx) * depth / fx # extrinisic transformation
                 point_camera_frame.point.y = (cyi - cy) * depth / fy
                 point_camera_frame.point.z = depth
                 # rospy.loginfo(f"3D Position in Camera Frame: X: {point_camera_frame.point.x}, Y: {point_camera_frame.point.y}, Z: {point_camera_frame.point.z}")
@@ -139,7 +140,7 @@ class RealRobotFacing(object):
         distance = np.linalg.norm(direction_to_object)
         print ("distance of robot from {} = {}".format(req.obj, distance))
         print ("angle difference between {} and robot {}".format(req.obj,angle))
-        if angle < 1.5:  # This value may need refining.
+        if angle < 2:  # This value may need refining.
             rospy.loginfo(f"Robot is facing {obj}.")
             return FacingResponse(True)
         else:
