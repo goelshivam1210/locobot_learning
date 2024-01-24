@@ -11,24 +11,13 @@ import moveit_commander
 from moveit_msgs.srv import GetPositionIK
 from interbotix_xs_modules.locobot import InterbotixLocobotXS
 from sensor_msgs.msg import JointState
-from visualization_msgs.msg import Marker
+# from visualization_msgs.msg import Marker
 import tf2_geometry_msgs #pleasthis helps in the tf2 transform error and exception
 
 
 class Grasp:
     def __init__(self) -> None:
-        # rospy.init_node("grasp_node")  # Initialize the ROS node here
-
-        # self.x_view = -0.008972  # Coordinates of camera
-        # self.y_view = -0.015818
-        # self.z_view = 0.000003
-
         self.arm_tf = "locobot/arm_base_link"
-        # self.locobot_tf = "locobot/camera_color_optical_frame"
-
-        # Initialize TF2 buffer and listener
-        # self.tf_buffer = tf2_ros.Buffer()
-        # self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         # This initializes the robots's arm
         self.bot = InterbotixLocobotXS("locobot_wx200", arm_model="mobile_wx200")
@@ -45,10 +34,14 @@ class Grasp:
             name="interbotix_arm",
             ns="locobot",
         )
+        
+        self.arm_moving = False  # Flag to track if the arm is already moving
 
         # Subscribe to the transformed_markers topic
         # rospy.Subscriber("/locobot/transformed_markers", Marker, self.marker_callback)
-        rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
+        # rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
+        rospy.Subscriber("/transformed_coordinates", PoseStamped, self.marker_callback)
+    
 
     def marker_callback(self, marker_msg):
         rospy.loginfo("callback is called")
@@ -71,31 +64,39 @@ class Grasp:
         self.move_arm(pose)
 
     def move_arm(self, pose):
-        self.pub_coordinates.publish(pose)
+        if not self.arm_moving:
+            self.pub_coordinates.publish(pose)
 
-        # Extract position and orientation from the pose
-        x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z
-        rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
-        roll, pitch, yaw = 0.0, 0.0, 0.0  # Set the desired orientation as needed
+            # Extract position and orientation from the pose
+            x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z
+            rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
+            roll, pitch, yaw = 0.0, 0.0, 0.0  # Set the desired orientation as needed
+            yaw = math.atan2(pose.pose.position.y, pose.pose.position.x)
 
-        # Open gripper
-        rospy.loginfo("Opening gripper")
-        self.bot.gripper.open()
-        time.sleep(0.2)
 
-        # Move the arm
-        rospy.loginfo("Moving arm")
-        self.bot.arm.set_ee_pose_components(x, y, z, roll, pitch, yaw)
-        time.sleep(0.2)
+            # Open gripper
+            rospy.loginfo("Opening gripper")
+            self.bot.gripper.open()
+            time.sleep(0.2)
 
-        # Close gripper
-        self.bot.gripper.close()
-        time.sleep(0.2)
+            # Move the arm
+            rospy.loginfo("Moving arm")
+            self.bot.arm.set_ee_pose_components(x, y, z, roll, pitch, yaw)
+            time.sleep(0.2)
 
-        # Go to sleep pose
-        self.bot.arm.go_to_sleep_pose()
-        time.sleep(0.1)
+            # Close gripper
+            self.bot.gripper.close()
+            time.sleep(0.2)
 
+            # Go to sleep pose
+            self.bot.arm.go_to_sleep_pose()
+            time.sleep(0.1)
+            self.arm_moving = True  # Reset the flag once the arm movement is complete
+
+            # Unsubscribe from the /transformed_coordinates topic to prevent further arm movements
+            rospy.loginfo("Unsubscribing from /transformed_coordinates topic")
+            self.subscriber.unregister()
+            rospy.Subscriber("/transformed_coordinates", PoseStamped, self.marker_callback, callback_args=None, queue_size=1)
 if __name__ == "__main__":
     # rospy.init_node("grasp_node")  # Initialize the ROS node here
     Grasp()
