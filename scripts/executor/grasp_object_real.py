@@ -92,6 +92,8 @@ class Grasp:
             self.bot.arm.go_to_sleep_pose()
             time.sleep(0.1)
             self.arm_moving = True  # Reset the flag once the arm movement is complete
+            rospy.loginfo("Done")
+            time.sleep(5)
 
             # Unsubscribe from the /transformed_coordinates topic to prevent further arm movements
             rospy.loginfo("Unsubscribing from /transformed_coordinates topic")
