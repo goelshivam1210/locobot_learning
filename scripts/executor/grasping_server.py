@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import rospy
-from your_package_name.srv import MoveArm  # Replace 'your_package_name' with the actual name of your ROS package
-# ... (import other necessary modules)
+from locobot_learning.srv import RealGrasp
+
 
 class Grasp:
     def __init__(self):

@@ -6,6 +6,7 @@ from locobot_learning.srv import Approach
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from actionlib.simple_action_client import SimpleActionClient
+from std_srvs.srv import Empty
 
 # This will be populated from the ROS parameter server
 GOAL_LOCATIONS = {}
@@ -37,6 +38,14 @@ def sanitize_quaternion_for_2d_navigation(orientation):
     return orientation
 
 def send_goal(goal_name: str):
+    # Call the service to clear costmaps
+    rospy.wait_for_service('/locobot/move_base/clear_costmaps')
+    try:
+        clear_costmaps = rospy.ServiceProxy('/locobot/move_base/clear_costmaps', Empty)
+        clear_costmaps()
+        rospy.loginfo("Cleared the cost maps")
+    except rospy.ServiceException as e:
+        rospy.logerr("Service call failed: %s", e)
     client = SimpleActionClient('/locobot/move_base', MoveBaseAction)
     client.wait_for_server()
 
