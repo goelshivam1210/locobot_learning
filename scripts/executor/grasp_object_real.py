@@ -68,7 +68,8 @@ class Grasp:
             self.pub_coordinates.publish(pose)
 
             # Extract position and orientation from the pose
-            x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z
+            x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z 
+            z+=0.06
             rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
             roll, pitch, yaw = 0.0, 0.0, 0.0  # Set the desired orientation as needed
             yaw = math.atan2(pose.pose.position.y, pose.pose.position.x)
