@@ -3,6 +3,7 @@
 import rospy
 from locobot_learning.srv import Facing, FacingResponse
 from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker
 
 
 class RealRobotFacing(object):
@@ -22,6 +23,7 @@ class RealRobotFacing(object):
 
 
         rospy.init_node('RealRobotFacing', anonymous=True)
+
 
         self.at_srv = rospy.Service('facing', Facing, self.facing_callback)
         rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
@@ -102,6 +104,7 @@ class RealRobotFacing(object):
                 rospy.loginfo(f"Object {req.obj} in tolerance range and detected!")
                 return FacingResponse(True)
         else:
+            rospy.loginfo(f"Object {req.obj} NOT detected")
             rospy.loginfo(f"Object {req.obj} NOT detected")
             return FacingResponse(False)
 
