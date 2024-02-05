@@ -22,10 +22,20 @@ class Grasp:
         # This initializes the robots's arm
         self.bot = InterbotixLocobotXS("locobot_wx200", arm_model="mobile_wx200")
         self.bot.camera.pan_tilt_move(0, 0.75)  # Set camera tilt angle
-
+        # self.intermediate_sleep_pose = [-0.00920388475060463,
+                    #    -1.3054176568984985, 1.5646604299545288,0.699495255947113,
+                        #  -0.3]
+        self.intermediate_sleep_pose = [-0.00920388475060463,
+                       -1.3054176568984985, 1.5646604299545288,-0.4,
+                         0.0]
+        # self.bot.arm.go_to_sleep_pose()
+        # self.bot.arm.set_single_joint_position(joint_name='wrist_angle', position = -0.4)
+        # self.bot.arm.set_single_joint_position(joint_name='wrist_rotate', position = 0.0)
+        # self.bot.arm.set_single_joint_position(joint_name='wrist_angle', position = 0.3)
         # Resets arm position to ensure arm is ready to move to any position
-        self.bot.arm.set_ee_pose_components(x=0.3, z=0.2)  # Y defaults to 0
-        self.bot.arm.go_to_sleep_pose()
+        # self.bot.arm.set_ee_pose_components(x=0.3, z=0.2)  # Y defaults to 0
+        # self.bot.arm.go_to_sleep_pose()
+        # self.bot.get_joint_commands()
 
         self.pub_coordinates = rospy.Publisher("grasp_pose", PoseStamped, queue_size=1000)
 
@@ -36,7 +46,6 @@ class Grasp:
         )
         
         self.arm_moving = False  # Flag to track if the arm is already moving
-
         # Subscribe to the transformed_markers topic
         # rospy.Subscriber("/locobot/transformed_markers", Marker, self.marker_callback)
         # rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
@@ -69,7 +78,7 @@ class Grasp:
 
             # Extract position and orientation from the pose
             x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z 
-            z+=0.06
+            z+=0.05
             rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
             roll, pitch, yaw = 0.0, 0.0, 0.0  # Set the desired orientation as needed
             yaw = math.atan2(pose.pose.position.y, pose.pose.position.x)
@@ -90,7 +99,8 @@ class Grasp:
             time.sleep(0.2)
 
             # Go to sleep pose
-            self.bot.arm.go_to_sleep_pose()
+            # self.bot.arm.go_to_sleep_pose()
+            self.bot.arm.set_joint_positions(joint_positions = self.intermediate_sleep_pose)
             time.sleep(0.1)
             self.arm_moving = True  # Reset the flag once the arm movement is complete
             rospy.loginfo("Done")
