@@ -3,6 +3,7 @@ import rospy
 from shapely.geometry import Point
 from shapely.geometry import Polygon
 import tf2_ros
+import numpy as np
 
 from locobot_learning.srv import At, AtResponse
 
