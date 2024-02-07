@@ -1,120 +1,92 @@
 #!/usr/bin/env python3
 import rospy
-import numpy as np
 from shapely.geometry import Point
 from shapely.geometry import Polygon
+import tf2_ros
+import numpy as np
 
-from locobot_custom.srv import At, AtResponse
-from gazebo_msgs.msg import ModelStates
+from locobot_learning.srv import At, AtResponse
 
-class RecycleBotGazeboAt(object):
+class RecycleBotAt(object):
 
     def __init__(self):
 
-        rospy.init_node('RecycleBotGazeboAt', anonymous=True)
+        #TO DO - bin always in room 2, won't change
+        #If gripper has picked up marker, then marker at loc of robot
+        #If gripper not picked up marker, in room1
+
+        rospy.init_node('RecycleBotAt', anonymous=True)
 
         self.at_srv = rospy.Service('at', At, self.at_callback)
 
         try:
             self.param_at_boundaries = rospy.get_param("at_boundaries")
         except (KeyError, rospy.ROSException):
+            
             rospy.logerr("Error getting parameters.")
             raise ValueError
 
+        #Deleted other mappings not relevant (coke can, etc)
         self.model_to_pddl_mapping = {
             "robot_1": "locobot",
-            "can_1": "coke_can_0",
-            "ball_1": "ball",
-            "bin_1": "bin",
+            "marker_1": "marker",
+            "bin_1": "bin"
         }
+
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         while not rospy.is_shutdown():
             rospy.spin()
+    
 
-    # def at_callback(self, req):
-    #     model_states = rospy.wait_for_message('/gazebo/model_states', ModelStates)
-        
-    #     room = req.room
-    #     obj = req.obj
-    #     rospy.loginfo(f"Received request to check if {obj} is in {room}.")
-
-    #     if obj not in self.model_to_pddl_mapping:
-    #         return AtResponse(False)
-
-    #     obj_mapped = self.model_to_pddl_mapping[obj]
-
-    #     if obj_mapped not in model_states.name:
-    #         rospy.logerr(f"Object {obj_mapped} not found in model states.")
-    #         return AtResponse(False)
-
-    #     index = model_states.name.index(obj_mapped)
-    #     pose = model_states.pose[index]
-    #     rospy.loginfo(f"Pose of {obj} is {pose}.")
-    #     object_position = np.array([pose.position.x, pose.position.y])
-    #     rospy.loginfo(f"Object {obj} is at {object_position}.")
-
-    #     at = "nothing"
-    #     point = (object_position[0], object_position[1])
-    #     print(point)
-    #     for boundary_name, boundary_polygon in self.param_at_boundaries.items():
-
-    #         boundary = [(x, y) for [x, y] in boundary_polygon]
-
-    #         if self.is_point_inside_polygon(point, boundary):
-    #             at = boundary_name
-    #             rospy.loginfo(f"Object {obj} determined to be in {at}.") # Adding this for clarity
-    #             if boundary_name == "nothing":
-    #                 rospy.loginfo(f"Object {obj} is not in {room}.")
-    #                 break
-        
-    #     print (at)
-
-    #     if at == room:
-    #         rospy.loginfo(f"Object {obj} is in {room}.") # Logging confirmation
-    #         return AtResponse(True)
-    #     else:
-    #         rospy.loginfo(f"Object {obj} is NOT in {room}. It's in {at}.") # More detailed error message
-    #         return AtResponse(False)
-        
     def at_callback(self, req):
-        model_states = rospy.wait_for_message('/gazebo/model_states', ModelStates)
-        
+        #Determine if request for marker, bin or robot
         room = req.room
         obj = req.obj
         rospy.loginfo(f"Received request to check if {obj} is in {room}.")
 
         if obj not in self.model_to_pddl_mapping:
             return AtResponse(False)
+        
+        if obj == "robot_1":
+            return self.is_robot_in_room(room)
+        elif obj == "marker_1":
+            return self.is_marker_in_room(room)
+        else:
+            return self.is_bin_in_room(room)
 
-        obj_mapped = self.model_to_pddl_mapping[obj]
 
-        if obj_mapped not in model_states.name:
-            rospy.logerr(f"Object {obj_mapped} not found in model states.")
-            return AtResponse(False)
+    def is_robot_in_room(self, room):
+        # model_states = rospy.wait_for_message('/gazebo/model_states', ModelStates)
+        robot_position, _ = self.get_robot_pose_orientation()
+        x_pos, y_pos = robot_position[0], robot_position[1]
+        rospy.loginfo(f"Robot X position: {x_pos} \n Y Pos: {y_pos}")
 
-        index = model_states.name.index(obj_mapped)
-        pose = model_states.pose[index]
-        rospy.loginfo(f"Pose of {obj} is {pose}.")
-        object_position = np.array([pose.position.x, pose.position.y])
-        rospy.loginfo(f"Object {obj} is at {object_position}.")
-
-        point = (object_position[0], object_position[1])
+        point = (x_pos, y_pos)
 
         # Check if point is in requested room
         boundary = self.param_at_boundaries[room]
-        if self.is_point_inside_polygon(point, self.param_at_boundaries['room_1']):
-            rospy.loginfo(f"Point {point} is inside room_1 boundaries.")
-        else:
-            rospy.loginfo(f"Point {point} is NOT inside room_1 boundaries.")
 
         if self.is_point_inside_polygon(point, boundary):
-            rospy.loginfo(f"Object {obj} is in {room}.")
+            rospy.loginfo(f"Object robot_1 is in {room}.")
             return AtResponse(True)
         else:
-            rospy.loginfo(f"Object {obj} is NOT in {room}.")
+            rospy.loginfo(f"Object robot_1 is NOT in {room}.")
             return AtResponse(False)
-
-
+    
+    def is_marker_in_room(self, room):
+        #To Do - Get whether marker picked up, if so get location of robot
+        if room == "room_1":
+            return AtResponse(True)
+        else:
+            return AtResponse(False)
+    
+    def is_bin_in_room(self, room):
+        if room == "room_2":
+            return AtResponse(True)
+        else:
+            return AtResponse(False)
 
         
     def is_point_inside_polygon(self, point_coords, boundary_coords):
@@ -122,39 +94,31 @@ class RecycleBotGazeboAt(object):
         Check if a given point is inside a polygon defined by boundary coordinates.
         :param point_coords: Tuple of (x, y) coordinates for the point.
         :param boundary_coords: List of tuples, each tuple being (x, y) coordinates of a vertex of the polygon.
-        :return: True if the point is inside the polygon, False otherwise.
+        :return: True if the point is inside the polygon, False otherwise.        if self.is_point_inside_polygon(point, self.param_at_boundaries['room_1']):
+            rospy.loginfo(f"Point {point} is inside room_1 boundaries.")
+        else:
+            rospy.loginfo(f"Point {point} is NOT inside room_1 boundaries.")
         """
         point = Point(point_coords)
         poly = Polygon(boundary_coords)
         return point.within(poly)
+    
 
+    
+    def get_robot_pose_orientation(self):
+        """
+        Retrieves the current pose and orientation of the robot in the map frame.
+        """
 
-    # def is_point_inside_polygon(self, point, polygon):
-    #     """
-    #     Determines if the point is inside the polygon.
-
-    #     Args:
-    #     - point (tuple): A tuple representing the point (x, y).
-    #     - polygon (list): A list of tuples representing the vertices of the polygon in sequential order.
-
-    #     Returns:
-    #     - bool: True if the point is inside the polygon, False otherwise.
-    #     """
-    #     x, y = point
-    #     num_vertices = len(polygon)
-    #     odd_nodes = False
-    #     j = num_vertices - 1  # The last vertex is the previous one to the first vertex
-
-    #     for i in range(num_vertices):
-    #         xi, yi = polygon[i]
-    #         xj, yj = polygon[j]
-    #         if yi < y and yj >= y or yj < y and yi >= y:
-    #             if xi + (y - yi) / (yj - yi) * (xj - xi) < x:
-    #                 odd_nodes = not odd_nodes
-    #         j = i
-
-        return odd_nodes
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'locobot/base_link', rospy.Time())
+            translation = transform.transform.translation
+            rotation = transform.transform.rotation
+            return np.array([translation.x, translation.y, translation.z]), [rotation.x, rotation.y, rotation.z, rotation.w]
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logerr(f"Error getting transform: {e}")
+            return None, None
 
         
 if __name__ == "__main__":
-    RecycleBotGazeboAt()
+    RecycleBotAt()

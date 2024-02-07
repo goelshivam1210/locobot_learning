@@ -26,11 +26,13 @@ class Grasp:
                     #    -1.3054176568984985, 1.5646604299545288,0.699495255947113,
                         #  -0.3]
         self.intermediate_sleep_pose = [-0.00920388475060463,
-                       -1.3054176568984985, 1.5646604299545288,-0.4,
+                       -1.3054176568984985, 1.5646604299545288,0.2,
                          0.0]
+        
         # self.bot.arm.go_to_sleep_pose()
-        # self.bot.arm.set_single_joint_position(joint_name='wrist_angle', position = -0.4)
+        # self.bot.arm.set_single_joint_position(joint_name='wrist_angle', position = 0.2)
         # self.bot.arm.set_single_joint_position(joint_name='wrist_rotate', position = 0.0)
+
         # self.bot.arm.set_single_joint_position(joint_name='wrist_angle', position = 0.3)
         # Resets arm position to ensure arm is ready to move to any position
         # self.bot.arm.set_ee_pose_components(x=0.3, z=0.2)  # Y defaults to 0
@@ -78,7 +80,9 @@ class Grasp:
 
             # Extract position and orientation from the pose
             x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z 
-            z+=0.05
+            # z+=0.05
+            # z -= 1
+            # z += 0.03
             rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
             roll, pitch, yaw = 0.0, 0.0, 0.0  # Set the desired orientation as needed
             yaw = math.atan2(pose.pose.position.y, pose.pose.position.x)
