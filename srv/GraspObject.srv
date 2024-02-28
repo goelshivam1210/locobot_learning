@@ -1,0 +1,5 @@
+# Service definition for grasping an object
+string target_object
+---
+bool success
+string message

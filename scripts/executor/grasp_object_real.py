@@ -28,16 +28,6 @@ class Grasp:
         self.intermediate_sleep_pose = [-0.00920388475060463,
                        -1.3054176568984985, 1.5646604299545288,0.2,
                          0.0]
-        
-        # self.bot.arm.go_to_sleep_pose()
-        # self.bot.arm.set_single_joint_position(joint_name='wrist_angle', position = 0.2)
-        # self.bot.arm.set_single_joint_position(joint_name='wrist_rotate', position = 0.0)
-
-        # self.bot.arm.set_single_joint_position(joint_name='wrist_angle', position = 0.3)
-        # Resets arm position to ensure arm is ready to move to any position
-        # self.bot.arm.set_ee_pose_components(x=0.3, z=0.2)  # Y defaults to 0
-        # self.bot.arm.go_to_sleep_pose()
-        # self.bot.get_joint_commands()
 
         self.pub_coordinates = rospy.Publisher("grasp_pose", PoseStamped, queue_size=1000)
 
@@ -48,9 +38,6 @@ class Grasp:
         )
         
         self.arm_moving = False  # Flag to track if the arm is already moving
-        # Subscribe to the transformed_markers topic
-        # rospy.Subscriber("/locobot/transformed_markers", Marker, self.marker_callback)
-        # rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
         rospy.Subscriber("/transformed_coordinates", PoseStamped, self.marker_callback)
     
 
@@ -71,8 +58,8 @@ class Grasp:
         # Log the pose information
         rospy.loginfo(f"Received marker pose: x={x}, y={y}, z={z}")
 
-        # Move the arm to the specified pose
-        self.move_arm(pose)
+        # # Move the arm to the specified pose
+        # self.move_arm(pose)
 
     def move_arm(self, pose):
         if not self.arm_moving:
@@ -80,7 +67,7 @@ class Grasp:
 
             # Extract position and orientation from the pose
             x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z 
-            # z+=0.05
+            # z+=0.07 # offset for the mug
             # z -= 1
             # z += 0.03
             rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
