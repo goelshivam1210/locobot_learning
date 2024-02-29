@@ -24,13 +24,13 @@ class RealRobotHold(object):
         self.bot = InterbotixLocobotXS("locobot_wx200", arm_model="mobile_wx200")
         self.left_finger = 0
         self.right_finger = 0
-        self.tolerance = 0.015
+        self.tolerance = 0.015 
 
         self.at_srv = rospy.Service('holding_obj', Hold, self.hold_callback)
         rospy.Subscriber("/locobot/joint_states", JointState, self.gripper_callback)
 
     def hold_callback(self, req):
-        self.bot.gripper.open()
+        # self.bot.gripper.open()
         # Close gripper
         self.bot.gripper.close()
         time.sleep(1)
