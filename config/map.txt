@@ -1,0 +1,20 @@
+import rospy
+import numpy as np
+from nav_msgs.msg import OccupancyGrid
+
+def grid_callback(data):
+    # Extract grid data
+    width, height = data.info.width, data.info.height
+    grid_data = np.array(data.data)
+
+    # Reshape into 2D grid
+    grid_2d = grid_data.reshape((height, width))
+
+
+def listener():
+    rospy.init_node('grid_listener', anonymous=True)
+    rospy.Subscriber("/locobot/rtabmap/grid_map", OccupancyGrid, grid_callback)
+    rospy.spin()
+
+if __name__ == '__main__':
+    listener()
