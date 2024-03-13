@@ -69,13 +69,15 @@ class RealRobotFacing(object):
         }
 
         self.val_orientation_mapping = {
+            #Need to move this out to config
+            #Yaw lower and upper bound parameters
             "door": {
-                "yl": -2.072,
-                "yu": -1.352
+                "yl": -2.0,
+                "yu": -1.0
             },
             "bin": {
-                "yl": -1.322,
-                "yu": -0.546
+                "yl": -0.45,
+                "yu": 1.45
             }
         }
 
