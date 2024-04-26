@@ -111,6 +111,7 @@ class ArmServer:
         rospy.loginfo("Object grasped.")
 
         rospy.loginfo("Return to intermediate sleep pose")
+        self.bot.arm.go_to_home_pose()
         self.bot.arm.set_joint_positions(joint_positions = self.intermediate_sleep_pose)
         return GraspObjectResponse(success=True)
 
