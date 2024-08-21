@@ -114,21 +114,54 @@ class ArmServer:
         self.bot.arm.go_to_home_pose()
         self.bot.arm.set_joint_positions(joint_positions = self.intermediate_sleep_pose)
         return GraspObjectResponse(success=True)
-
-    def move_arm(self, pose, flag):
+    
+    def move_arm(self, pose, flag, max_tries=2):
         # Publish the pose for visualization
         self.pub_coordinates.publish(pose)
+
         # Extract position and orientation from the pose
         x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z 
         roll, pitch, yaw = 0.0, 0.0, 0.0  # Set the desired orientation as needed
         yaw = math.atan2(pose.pose.position.y, pose.pose.position.x)  
         pitch = 0.0   
+
         if flag:
-            z +=0.02
+            z += 0.02
+
+        # Try to move and plan until success or until max_tries is reached
+        success = False
+        attempts = 0
+
+        while not success and attempts < max_tries:
+            try:
+                rospy.loginfo(f"Attempt {attempts + 1}/{max_tries}: Trying to move arm to pose: x={x}, y={y}, z={z}")
+                # Move the arm and get the execution result
+                executed = self.bot.arm.set_ee_pose_components(x, y, z, roll, pitch, yaw)
+                success = executed[1]  # Check the second element in the tuple for success
+
+                # Log the execution result
+                rospy.loginfo(f"Executed: {executed}")
+
+                if success:
+                    rospy.loginfo("Arm movement successful.")
+                else:
+                    rospy.logwarn("Execution failed. Retrying...")
+                
+                time.sleep(0.2)  # Short delay before retrying if unsuccessful
+                attempts += 1
+            except Exception as e:       
+                rospy.logerr(f"An error occurred while moving the arm: {e}")
+                time.sleep(0.2)  # Short delay before retrying in case of error
+                attempts += 1
+
+        if not success:
+            rospy.logerr(f"Failed to move arm after {max_tries} attempts.")
+
         # Move the arm
-        rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
-        self.bot.arm.set_ee_pose_components(x, y, z, roll, pitch, yaw)
-        time.sleep(0.2)
+        # rospy.loginfo(f"Moving arm to pose: x={x}, y={y}, z={z}")
+        # executed = self.bot.arm.set_ee_pose_components(x, y, z, roll, pitch, yaw)
+        # rospy.loginfo(f"Executed: {executed}")
+        # time.sleep(0.2)
 
     def handle_drop_object(self, request):
         

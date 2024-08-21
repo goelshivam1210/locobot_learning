@@ -19,7 +19,7 @@ class TransformAndPublish:
     def marker_callback(self, marker_msg):
         # rospy.logdebug("HERE")
         try:
-            # rospy.loginfo(marker_msg)
+            rospy.loginfo(marker_msg)
             transform = self.tf_buffer.lookup_transform("locobot/arm_base_link", "locobot/camera_color_optical_frame", rospy.Time())
 
             # Transform the marker coordinates to arm_base_link frame
@@ -46,3 +46,6 @@ class TransformAndPublish:
 if __name__ == "__main__":
     TransformAndPublish()
     rospy.spin()
+
+
+
