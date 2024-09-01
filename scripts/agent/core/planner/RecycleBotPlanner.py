@@ -1,4 +1,4 @@
-from planner.Planner import Planner
+from planner import Planner
 from pddl_parser.planner import Planner as PDDL_Planner 
 from os.path import join
 
@@ -24,6 +24,7 @@ class RecycleBotPlanner(Planner):
                     return f"(at {room} {obj})"
             print(f"No room found for object: {obj}. Not returning any string.")
 
+
         def get_facing():
             # First check if the robot is facing 'nothing'
             response = self._predicate_funcs['facing']('nothing')
@@ -46,41 +47,6 @@ class RecycleBotPlanner(Planner):
                     if response.robot_holding_obj:
                         return f"(hold {obj})"
             return "(hold nothing)"
-
-
-                
-    #     def get_facing():
-    #         # First check if the robot is facing 'nothing'
-    #         if self._predicate_funcs['facing']('nothing'):
-    #             return "(facing nothing)"
-            
-    #         # If the robot is not facing 'nothing', check the other objects
-    #         for obj_type in self.objects.keys():
-    #             for obj in self.objects[obj_type]:
-    #                 if obj != 'nothing' and self._predicate_funcs['facing'](obj):
-    #                     return f"(facing {obj})"
-    #         return None  # for safety and sanity, it will never reach here
-
-
-    #    # this is buggy
-    #     # def get_facing():
-    #     #     for obj_type in self.objects.keys():
-    #     #         print (self.objects[obj_type])
-    #     #         print (self.objects.keys())
-    #     #         for obj in self.objects[obj_type]:
-    #     #             print (obj)
-    #     #             if (self._predicate_funcs['facing'](obj)):
-    #     #                 print (f"(facing {obj})")
-    #     #                 return f"(facing {obj})"
-                
-        
-    #     def get_hold():
-    #         for obj_type in self.objects.keys():
-    #             for obj in self.objects[obj_type]:
-    #                 res = self._predicate_funcs['hold'](obj)
-    #                 if res.robot_holding_obj == True:
-    #                     return f"(hold {obj})"
-    #         return f"(hold nothing)"
 
         robot_1_at = get_at('robot_1')
         can_1_at = get_at('can_1')

@@ -1,0 +1,139 @@
+.
+├── CMakeLists.txt
+├── README.md
+├── config
+│   ├── at_boundaries.yaml
+│   ├── facing_boundaries.yaml
+│   ├── facing_thresh.yaml
+│   ├── hold_thresh.yaml
+│   ├── map.txt
+│   ├── real_nav_goals.yaml
+│   └── sim_nav_goals.yaml
+├── maps
+├── package.xml
+├── rostopics.txt
+├── scripts
+│   ├── agent
+│   │   └── core
+│   │       ├── Agent.py
+│   │       ├── PDDLActions.py
+│   │       ├── PDDLPredicates.py
+│   │       ├── RecycleBotMain.py
+│   │       ├── learner
+│   │       │   └── ppo_learner.py
+│   │       └── planner
+│   │           └── planner.py
+│   ├── environment
+│   │   ├── ActionGenerator.py
+│   │   ├── NovelGym.py
+│   │   ├── ObservationGenerator.py
+│   │   ├── ObservationUtils.py
+│   │   ├── RecycleBot.py
+│   │   ├── RewardFunction.py
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── ActionGenerator.cpython-38.pyc
+│   │   │   ├── NovelGym.cpython-38.pyc
+│   │   │   ├── ObservationGenerator.cpython-38.pyc
+│   │   │   ├── RecycleBot.cpython-38.pyc
+│   │   │   ├── RewardFunction.cpython-38.pyc
+│   │   │   └── RewardFunctionGenerator.cpython-38.pyc
+│   │   ├── occupancy_grid.py
+│   │   ├── predicate_services
+│   │   │   ├── __init__.py
+│   │   │   ├── at.py
+│   │   │   ├── contain.py
+│   │   │   ├── facing.py
+│   │   │   └── hold_real.py
+│   │   ├── test.py
+│   │   └── tests
+│   │       ├── __init__.py
+│   │       └── test_observation_gazebo_client.py
+│   ├── executor
+│   │   ├── __init__.py
+│   │   ├── approach_server_real.py
+│   │   ├── arm_server.py
+│   │   ├── cmd_vel_publisher.py
+│   │   ├── tests
+│   │   │   ├── __init__.py
+│   │   │   ├── test_approach.py
+│   │   │   ├── test_grasp.py
+│   │   │   ├── test_place.py
+│   │   │   └── test_primitive.py
+│   │   └── utils
+│   │       └── __init__.py
+│   ├── knowledge
+│   │   ├── PDDL
+│   │   │   ├── __init__.py
+│   │   │   └── recycle_bot
+│   │   │       ├── __init__.py
+│   │   │       ├── domain.pddl
+│   │   │       ├── problem.pddl
+│   │   │       └── problem_plan.pddl
+│   │   └── pddl-parser
+│   │       ├── LICENSE
+│   │       ├── README.md
+│   │       ├── build
+│   │       │   ├── lib
+│   │       │   │   └── pddl_parser
+│   │       │   │       ├── PDDL.py
+│   │       │   │       ├── __init__.py
+│   │       │   │       ├── action.py
+│   │       │   │       └── planner.py
+│   │       │   └── lib.linux-x86_64-2.7
+│   │       │       └── pddl_parser
+│   │       │           ├── PDDL.py
+│   │       │           ├── __init__.py
+│   │       │           ├── action.py
+│   │       │           └── planner.py
+│   │       ├── examples
+│   │       │   ├── blocksworld
+│   │       │   │   ├── blocksworld.pddl
+│   │       │   │   ├── pb1.pddl
+│   │       │   │   ├── pb2.pddl
+│   │       │   │   ├── pb3.pddl
+│   │       │   │   ├── pb4.pddl
+│   │       │   │   ├── pb5.pddl
+│   │       │   │   └── pb6.pddl
+│   │       │   ├── dinner
+│   │       │   │   ├── dinner.pddl
+│   │       │   │   └── pb1.pddl
+│   │       │   ├── dwr
+│   │       │   │   ├── dwr.pddl
+│   │       │   │   ├── pb1.pddl
+│   │       │   │   └── pb2.pddl
+│   │       │   └── tsp
+│   │       │       ├── pb1.pddl
+│   │       │       └── tsp.pddl
+│   │       ├── pddl_parser
+│   │       │   ├── PDDL.py
+│   │       │   ├── __init__.py
+│   │       │   ├── __pycache__
+│   │       │   │   ├── PDDL.cpython-38.pyc
+│   │       │   │   ├── __init__.cpython-38.pyc
+│   │       │   │   ├── action.cpython-38.pyc
+│   │       │   │   └── planner.cpython-38.pyc
+│   │       │   ├── action.py
+│   │       │   └── planner.py
+│   │       ├── setup.py
+│   │       ├── test_PDDL.py
+│   │       └── test_planner.py
+│   └── perception
+│       ├── ARTracker.py
+│       ├── ObjectOrientation.py
+│       └── find_object_coordinates.py
+├── srv
+│   ├── Approach.srv
+│   ├── At.srv
+│   ├── Contain.srv
+│   ├── DropObject.srv
+│   ├── DropObjectAside.srv
+│   ├── Facing.srv
+│   ├── Grasp.srv
+│   ├── GraspObject.srv
+│   ├── Hold.srv
+│   ├── Place.srv
+│   └── PrimitiveBase.srv
+└── tree.txt
+
+33 directories, 104 files
