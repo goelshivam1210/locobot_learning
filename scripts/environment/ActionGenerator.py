@@ -138,75 +138,6 @@ class ActionSpaceGenerator:
     def reset(self):
         pass # dummy for now
     
-    # def get_valid_actions(self, state):
-    #     """
-    #     Generate a list of valid actions based on the current state of the world.
-
-    #     Args:
-    #     state (set): The current state of the world, represented as a set of predicates.
-
-    #     Returns:
-    #     valid_actions (list): List of valid actions in the current state.
-    #     """
-    #     valid_actions = []
-    #     for action in self.grounded_actions:
-    #         action_name, *action_objects = action.split()
-    #         action_obj = self.get_action_by_name(action_name)
-    #         if all(self.check_precondition(pre, action_obj.parameters, action_objects, state) for pre in action_obj.positive_preconditions):
-    #             valid_actions.append(action)
-    #     return valid_actions
-
-    # def get_action_by_name(self, action_name):
-    #     """
-    #     Get an action object by its name.
-
-    #     Args:
-    #     action_name (str): The name of the action.
-
-    #     Returns:
-    #     action (Action): The action object with the given name, or None if no such action exists.
-    #     """
-    #     for action in self.parser.actions:
-    #         if action.name == action_name:
-    #             return action
-    #     return None
-
-    # def check_precondition(self, precondition, parameters, action_objects, state):
-    #     """
-    #     Check whether a precondition is satisfied in the current state.
-
-    #     Args:
-    #     precondition (tuple): The precondition to check.
-    #     parameters (list): The parameters of the action.
-    #     action_objects (list): The objects involved in the action.
-    #     state (set): The current state of the world.
-
-    #     Returns:
-    #     satisfied (bool): True if the precondition is satisfied in the current state, False otherwise.
-    #     """
-    #     predicate, *pre_vars = precondition
-    #     ground_precondition = [predicate] + [self.ground_variable(var, parameters, action_objects) for var in pre_vars]
-    #     return tuple(ground_precondition) in state
-
-    # def ground_variable(self, var, parameters, action_objects):
-    #     """
-    #     Replace a variable with its corresponding object.
-
-    #     Args:
-    #     var (str): The variable to replace.
-    #     parameters (list): The parameters of the action.
-    #     action_objects (list): The objects involved in the action.
-
-    #     Returns:
-    #     object (str): The object corresponding to the variable, or None if no such object exists.
-    #     """
-    #     for param, obj in zip(parameters, action_objects):
-    #         if param[0] == var:
-    #             return obj
-    #     return None
-    
-    
-
 if __name__ == "__main__":
     domain_file = "../knowledge/PDDL/recycle_bot/domain.pddl"  
     problem_file = "../knowledge/PDDL/recycle_bot/problem.pddl"  
@@ -223,10 +154,3 @@ if __name__ == "__main__":
     print("\nNon-grounded actions:")
     for action, params in action_gen.non_grounded_actions.items():
         print(f"{action} {params}")
-
-    # # Print all valid actions in the initial state
-    # print("\nValid actions in initial state:")
-    # valid_actions = action_gen.get_valid_actions(action_gen.parser.state)
-    # for action in valid_actions:
-    #     print(action)
-
