@@ -3,7 +3,6 @@ from os import mkdir
 from os.path import exists, join
 from pddl_parser.PDDL import PDDL_Parser
 from pddl_parser.planner import Planner as PDDL_Planner
-import inspect
 
 class Planner:
     def __init__(self, domain_path: str, predicate_funcs: dict):

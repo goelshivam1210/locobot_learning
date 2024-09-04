@@ -6,7 +6,7 @@ from sensor_msgs.msg import JointState
 from interbotix_xs_modules.locobot import InterbotixLocobotXS
 
 
-class RealRobotHold(object):
+class HoldService(object):
     """
     The RealRobotFacing class initializes the ROS node and provides methods to detect colored objects 
     and estimate whether the robot is facing them, based on the camera and depth images.
@@ -16,11 +16,6 @@ class RealRobotHold(object):
         """
         Initializes the RealRobotFacing object, sets up subscribers, service, and transformation listener.
         """
-
-
-        # rospy.init_node('RealRobotHold', anonymous=True)
-        # rospy.loginfo("Initialized here")
-
         self.bot = InterbotixLocobotXS("locobot_wx200", arm_model="mobile_wx200")
         self.left_finger = 0
         self.right_finger = 0
@@ -51,5 +46,5 @@ class RealRobotHold(object):
 
     
 if __name__ == "__main__":
-    RealRobotHold()
+    HoldService()
     rospy.spin()

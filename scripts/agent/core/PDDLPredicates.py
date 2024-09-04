@@ -1,7 +1,22 @@
 # core/PDDLPredicates.py
+import rospy
+from locobot_learning.srv import At, AtResponse
+from locobot_learning.srv import Hold, HoldResponse
+from locobot_learning.srv import Facing, FacingResponse
+from locobot_learning.srv import Contain, ContainResponse
+
+
 
 class PDDLPredicates:
     def __init__(self, predicate_funcs: dict):
+
+                # Initialize ROS service clients
+        self.at_service = rospy.ServiceProxy('/at_service', At)
+        self.contain_service = rospy.ServiceProxy('/contain_service', Contain)
+        self.facing_service = rospy.ServiceProxy('/facing_service', Facing)
+        self.hold_service = rospy.ServiceProxy('/hold_service', Hold)
+
+        
         self.predicate_funcs = predicate_funcs
 
     def check_preconditions(self, action_name: str, params: list) -> bool:

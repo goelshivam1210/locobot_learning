@@ -57,13 +57,13 @@ For this you will need to go to the config directory in `locobot_learning/config
 
 2. **Run the service**
 Go to the directory where the script (executor)
-```bash 
-cd locobot_learning/scripts/executor
-```
+  ```bash 
+  cd locobot_learning/scripts/executor
+  ```
 Launch the approach server
-```bash
-python approach_server_real.py
-```
+  ```bash
+  python approach_server_real.py
+  ```
 
 3. **List available services**:
    ```bash
@@ -84,9 +84,9 @@ Go to the directory where the script (executor)
 cd locobot_learning/scripts/executor
 ```
 Launch the approach server
-```bash
-python arm_server.py
-```
+  ```bash
+  python arm_server.py
+  ```
 2. **List available services**:
    ```bash
    rosservice list | grep grasp/drop/drop_aside
@@ -131,9 +131,9 @@ python arm_server.py
     ```
 
 - **RViz Remote Viewer**:
-  ```bash
-  roslaunch interbotix_xslocobot_descriptions remote_view.launch
-  ```
+    ```bash
+    roslaunch interbotix_xslocobot_descriptions remote_view.launch
+    ```
 
 - **Teleoperation**:
   Run the following to teleoperate Locobot:
@@ -162,10 +162,41 @@ python arm_server.py
 - [Interbotix XS Arms Perception Pipeline Configuration](https://docs.trossenrobotics.com/interbotix_xsarms_docs/ros1_packages/perception_pipeline_configuration.html)
 
 
+### Notes on virtual environment (ROS-python interfacing)
 
+Make your vitual environment 
 
+```bash
+python -env venv <.venv>
+```
+`.venv` is the name and the location and the name of the virtual environment. 
+
+Activate the environment
+
+```bash 
+source .venv/bin/activate
+```
+You can deactivate the environment using:
+
+```bash
+deactivate
 ```
 
+Installing requirements inside the virtual environment
+
+```bash
+pip install -r requirements.txt
+```
+
+Sourcing ROS
+
+```bash
+source ~/devel/setup.bash
+```
+
+## Directory structure
+
+```
 .
 ├── CMakeLists.txt
 ├── config
@@ -179,79 +210,55 @@ python arm_server.py
 ├── maps
 ├── package.xml
 ├── README.md
-├── readme_real.md
 ├── rostopics.txt
 ├── scripts
 │   ├── agent
-│   │   ├── Agent.py
-│   │   ├── dummy_planner.py
-│   │   ├── __init__.py
-│   │   ├── learner
+│   │   ├── core
+│   │   │   ├── Agent.py
+│   │   │   ├── HybridAgent.py
 │   │   │   ├── __init__.py
-│   │   │   ├── learner.py
-│   │   │   ├── random_learner.py
-│   │   │   └── test_discrete.py
-│   │   ├── PDDLActions.py
-│   │   ├── PDDLPredicates.py
-│   │   ├── planner
-│   │   │   ├── __init__.py
-│   │   │   ├── Planner.py
-│   │   │   └── __pycache__
-│   │   │       ├── __init__.cpython-38.pyc
-│   │   │       └── Planner.cpython-38.pyc
-│   │   ├── ppo_learner.py
-│   │   ├── __pycache__
-│   │   │   ├── Agent.cpython-38.pyc
-│   │   │   ├── PDDLActions.cpython-38.pyc
-│   │   │   ├── PDDLPredicates.cpython-38.pyc
-│   │   │   ├── ppo_learner.cpython-38.pyc
-│   │   │   ├── RecycleBotAgent.cpython-38.pyc
-│   │   │   └── RecycleBotPlanner.cpython-38.pyc
-│   │   ├── RecycleBotAgent.py
-│   │   ├── RecycleBotMain.py
-│   │   └── RecycleBotPlanner.py
+│   │   │   ├── learner
+│   │   │   │   ├── BaseLearner.py
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── LearningAgent.py
+│   │   │   │   └── PPOLearner.py
+│   │   │   ├── PDDLActions.py
+│   │   │   ├── PDDLPredicates.py
+│   │   │   └── planner
+│   │   │       ├── __init__.py
+│   │   │       ├── planner.py
+│   │   ├── README.md
+│   │   ├── tests
 │   ├── environment
-│   │   ├── ActionGenerator.py
+│   │   ├── action
+│   │   │   ├── action_space.py
+│   │   │   └── __init__.py
+│   │   ├── Environment.py
 │   │   ├── __init__.py
-│   │   ├── NovelGym.py
-│   │   ├── ObservationGenerator.py
-│   │   ├── observation_server_gazebo.py
-│   │   ├── ObservationUtils.py
-│   │   ├── occupancy_grid.py
-│   │   ├── predicate_services
+│   │   ├── README.md
+│   │   ├── RecycleBotSMDP.py
+│   │   ├── reward
+│   │   │   ├── __init__.py
+│   │   │   └── reward_function.py
+│   │   ├── ROS_services
 │   │   │   ├── at.py
 │   │   │   ├── contain.py
 │   │   │   ├── facing.py
 │   │   │   ├── hold_real.py
 │   │   │   └── __init__.py
-│   │   ├── __pycache__
-│   │   │   ├── ActionGenerator.cpython-38.pyc
-│   │   │   ├── NovelGym.cpython-38.pyc
-│   │   │   ├── ObservationGenerator.cpython-38.pyc
-│   │   │   ├── RecycleBot.cpython-38.pyc
-│   │   │   ├── RewardFunction.cpython-38.pyc
-│   │   │   └── RewardFunctionGenerator.cpython-38.pyc
-│   │   ├── RecycleBot.py
-│   │   ├── relative_proximity.py
-│   │   ├── RewardFunction.py
-│   │   ├── test.py
-│   │   └── tests
-│   │       ├── __init__.py
-│   │       └── test_observation_gazebo_client.py
+│   │   ├── state
+│   │   │   ├── __init__.py
+│   │   │   ├── observation_space.py
+│   │   │   ├── SubSymbolicState.py
+│   │   │   └── SymbolicState.py
+│   │   ├── tests
 │   ├── executor
 │   │   ├── approach_server_real.py
 │   │   ├── arm_server.py
 │   │   ├── cmd_vel_publisher.py
 │   │   ├── __init__.py
-│   │   ├── test.py
 │   │   ├── tests
-│   │   │   ├── __init__.py
-│   │   │   ├── test_approach.py
-│   │   │   ├── test_grasp.py
-│   │   │   ├── test_place.py
-│   │   │   └── test_primitive.py
 │   │   └── utils
-│   │       └── __init__.py
 │   ├── knowledge
 │   │   ├── PDDL
 │   │   │   ├── __init__.py
@@ -261,73 +268,21 @@ python arm_server.py
 │   │   │       ├── problem.pddl
 │   │   │       └── problem_plan.pddl
 │   │   └── pddl-parser
-│   │       ├── build
-│   │       │   ├── lib
-│   │       │   │   └── pddl_parser
-│   │       │   │       ├── action.py
-│   │       │   │       ├── __init__.py
-│   │       │   │       ├── PDDL.py
-│   │       │   │       └── planner.py
-│   │       │   └── lib.linux-x86_64-2.7
-│   │       │       └── pddl_parser
-│   │       │           ├── action.py
-│   │       │           ├── __init__.py
-│   │       │           ├── PDDL.py
-│   │       │           └── planner.py
-│   │       ├── examples
-│   │       │   ├── blocksworld
-│   │       │   │   ├── blocksworld.pddl
-│   │       │   │   ├── pb1.pddl
-│   │       │   │   ├── pb2.pddl
-│   │       │   │   ├── pb3.pddl
-│   │       │   │   ├── pb4.pddl
-│   │       │   │   ├── pb5.pddl
-│   │       │   │   └── pb6.pddl
-│   │       │   ├── dinner
-│   │       │   │   ├── dinner.pddl
-│   │       │   │   └── pb1.pddl
-│   │       │   ├── dwr
-│   │       │   │   ├── dwr.pddl
-│   │       │   │   ├── pb1.pddl
-│   │       │   │   └── pb2.pddl
-│   │       │   └── tsp
-│   │       │       ├── pb1.pddl
-│   │       │       └── tsp.pddl
-│   │       ├── LICENSE
-│   │       ├── pddl_parser
-│   │       │   ├── action.py
-│   │       │   ├── __init__.py
-│   │       │   ├── PDDL.py
-│   │       │   ├── planner.py
-│   │       │   └── __pycache__
-│   │       │       ├── action.cpython-38.pyc
-│   │       │       ├── __init__.cpython-38.pyc
-│   │       │       ├── PDDL.cpython-38.pyc
-│   │       │       └── planner.cpython-38.pyc
-│   │       ├── README.md
-│   │       ├── setup.py
-│   │       ├── test_PDDL.py
-│   │       └── test_planner.py
-│   └── perception
-│       ├── ARTracker.py
-│       ├── find_object_coordinates.py
-│       ├── ObjectOrientation.py
-│       └── transform_markers.py
+│   ├── perception
+│   │   ├── find_object_coordinates.py
+│   │   ├── ObjectOrientation.py
+│   │   └── transform_markers.py
 ├── srv
-│   ├── AlignRobot.srv
 │   ├── Approach.srv
 │   ├── At.srv
 │   ├── Contain.srv
 │   ├── DropObjectAside.srv
 │   ├── DropObject.srv
 │   ├── Facing.srv
-│   ├── GazeboObservation.srv
 │   ├── GraspObject.srv
-│   ├── GraspPose.srv
 │   ├── Grasp.srv
 │   ├── Hold.srv
 │   ├── Place.srv
 │   └── PrimitiveBase.srv
-└── tree.txt
 
 ```
