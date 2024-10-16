@@ -12,8 +12,9 @@ from tf.transformations import euler_from_quaternion
 
 class RealRobotFacing(object):
     """
-    The RealRobotFacing class initializes the ROS node and provides methods to detect colored objects 
-    and estimate whether the robot is facing them, based on the camera and depth images.
+    The RealRobotFacing class initializes the ROS node and provides methods to detect objects 
+    and estimate whether the robot is facing them, based on camera detection (non-stationary) or
+    its position and orientation (stationary).
     """
 
     def __init__(self):
@@ -21,10 +22,8 @@ class RealRobotFacing(object):
         Initializes the RealRobotFacing object, sets up subscribers, service, and transformation listener.
         """
 
-        self.measurements = [] * 10
-        self.valCounter = 0
+        self.marker_detected = False  # Flag to indicate if a marker is detected
         self.tolerance = 0.15
-
 
         rospy.init_node('RealRobotFacing', anonymous=True)
 
@@ -34,181 +33,124 @@ class RealRobotFacing(object):
             rospy.logerr("Error getting parameters.")
             raise ValueError
 
-
-        self.at_srv = rospy.Service('facing', Facing, self.facing_callback)
+        # Service and subscriber
+        self.facing_srv = rospy.Service('facing', Facing, self.facing_callback)
         rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
 
-        #Need to see how PDDL objects defined
+        # Map models to objects in the domain
         self.model_to_pddl_mapping = {
             "robot_1": "locobot",
-            "marker_y": "yellow_marker",
-            "marker_g": "green_marker",
-            "o_ball": "orange_ball",
-            "r_ball": "red_ball",
+            "generic_object": "generic_object",  # For any non-stationary object
             "door_1": "door",
-            "bin_1": "bin"
-        }
-
-        self.obj_color_mapping = {
-            "yellow_marker": {"r": 0.594,
-                            "g": 0.495,
-                            "b": 0.287},
-            "green_marker": {"r": 0.328,
-                            "g": 0.499,
-                            "b": 0.447},
-            "orange_ball": {"r": 0.72,
-                            "g": 0.6,
-                            "b": 0.2},
-            "red_ball": {"r": 0.72,
-                            "g": 0.6,
-                            "b": 0.2},
-            "bin": {"r": 0.72,
-                            "g": 0.6,
-                            "b": 0.2},
-            "door": {}
-        }
-
-        self.val_orientation_mapping = {
-            #Need to move this out to config
-            #Yaw lower and upper bound parameters
-            "door": {
-                "yl": -2.0,
-                "yu": -1.0
-            },
-            "bin": {
-                "yl": -0.45,
-                "yu": 1.45
-            }
+            "bin_1": "bin",
+            "table": "table",
+            "nothing": "nothing"  # To handle facing nothing
         }
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
-        
 
-    
     def facing_callback(self, req):
         """
         Service callback function to check whether the robot is facing a specified object.
-        It calculates the angle and distance between the robot and the object and responds whether
-        the robot is facing the object based on certain thresholds.
+        Stationary objects are checked using position and orientation; non-stationary using marker detection.
         """
-
         if req.obj not in self.model_to_pddl_mapping:
             rospy.loginfo("Object not in mapped models")
             return FacingResponse(False)
 
         model = self.model_to_pddl_mapping[req.obj]
 
-        if model == "door" or model == "bin":
-            return self.facing_zone(model, req.obj)
-        else:
-            return self.facing_color_obj(model, req.obj)
+        if model == "door" or model == "bin" or model == "table":
+            return self.facing_zone(model, req.obj)  # Stationary objects
 
-        
+        elif model == "generic_object":
+            # Non-stationary object, rely on marker detection
+            if self.marker_detected:
+                rospy.loginfo(f"Robot is facing non-stationary object: {req.obj}.")
+                return FacingResponse(True)
+            else:
+                rospy.loginfo(f"Robot is NOT facing non-stationary object: {req.obj}.")
+                return FacingResponse(False)
 
+        # If none of the above, assume facing nothing
+        return self.facing_nothing()
 
     def facing_zone(self, model, obj):
-        #Point in polygon
-        #Within upper/lower bounds
+        """
+        Logic to check if the robot is facing a stationary zone, such as a doorway, bin, or table.
+        """
         robot_position, robot_pose = self.get_robot_pose_orientation()
-        x_pos, y_pos = robot_position[0], robot_position[1]
+        if robot_position is None or robot_pose is None:
+            rospy.logwarn(f"Failed to get robot pose or position, assuming not facing {obj}.")
+            return FacingResponse(False)
         
-        rospy.loginfo(f"Robot X position: {x_pos} \n Y Pos: {y_pos}")
+        x_pos, y_pos = robot_position[0], robot_position[1]
+        rospy.loginfo(f"Robot X position: {x_pos}, Y position: {y_pos}")
 
         point = (x_pos, y_pos)
 
+        # Convert the robot's quaternion orientation to Euler angles (yaw)
         _, _, yaw = euler_from_quaternion(robot_pose)
 
-        lowerOrientation = self.val_orientation_mapping[model]["yl"]
-        upperOrientation = self.val_orientation_mapping[model]["yu"]
+        # Extract the threshold and boundary from the YAML
+        yaw_threshold = self.param_facing_boundaries[model]['threshold']
+        boundary = self.param_facing_boundaries[model]['boundary']
+
+        # Set the lower and upper bounds for yaw
+        lower_orientation = yaw - yaw_threshold
+        upper_orientation = yaw + yaw_threshold
+        
         rospy.loginfo(f"Yaw: {yaw}")
-        rospy.loginfo(f"YL: {lowerOrientation}")
-        rospy.loginfo(f"YU: {upperOrientation}")
+        rospy.loginfo(f"Yaw lower limit: {lower_orientation}, Yaw upper limit: {upper_orientation}")
 
-        # Check if point is in requested room
-        boundary = self.param_facing_boundaries[model]
-        rospy.loginfo(self.is_point_inside_polygon(point, boundary))
+        rospy.loginfo(f"Robot position: {point}, {obj} boundary: {boundary}")
+        rospy.loginfo(f"Point inside {obj} boundary: {self.is_point_inside_polygon(point, boundary)}")
 
-        if (self.is_point_inside_polygon(point, boundary) 
-            and lowerOrientation <= yaw <= upperOrientation):
+        # Check if the robot's position is inside the bin/doorway/table boundary and yaw is within the range
+        if (self.is_point_inside_polygon(point, boundary) and 
+            lower_orientation <= yaw <= upper_orientation):
             rospy.loginfo(f"Robot is facing {obj}.")
             return FacingResponse(True)
         else:
             rospy.loginfo(f"Robot is NOT facing {obj}.")
             return FacingResponse(False)
-        
 
-
-    def facing_color_obj(self, model, obj):
-        obj_colors = self.obj_color_mapping[model]
-
-
-        red = 0
-        green = 0
-        blue = 0
-        for m in self.measurements:
-            red += m.r
-            green += m.g
-            blue += m.b
-        
-        if len(self.measurements) > 0:
-            red = red/len(self.measurements)
-            green = green/len(self.measurements)
-            blue = blue/len(self.measurements)
+    def facing_nothing(self):
+        """
+        Check if the robot is facing 'nothing', meaning no object or marker is detected.
+        """
+        # If no objects are detected and no stationary objects are faced, return True for facing nothing
+        if not self.marker_detected:
+            rospy.loginfo("Robot is facing nothing.")
+            return FacingResponse(True)
         else:
-            rospy.loginfo("No measurement data recorded")
+            rospy.loginfo("Robot is NOT facing nothing, an object is detected.")
             return FacingResponse(False)
-        
-
-        rospy.loginfo("Measurements: ")
-        rospy.loginfo(self.measurements)
-        rospy.loginfo(f"Averages --- Red: {red} Green: {green} Blue: {blue}")
-        rospy.loginfo(obj_colors)
-
-        if ((obj_colors["r"] - self.tolerance  <= red <= obj_colors["r"] + self.tolerance) 
-            and (obj_colors["g"] - self.tolerance  <= green <= obj_colors["g"] + self.tolerance)
-            and (obj_colors["b"] - self.tolerance  <= blue <= obj_colors["b"] + self.tolerance)):
-                rospy.loginfo(f"Object {req.obj} in tolerance range and detected!")
-                return FacingResponse(True)
-        else:
-            rospy.loginfo(f"Object {obj} NOT detected")
-            rospy.loginfo(f"Object {obj} NOT detected")
-            return FacingResponse(False)
-
 
     def marker_callback(self, marker_msg):
-        # rospy.loginfo("At marker callback")
-        # rospy.loginfo(self.measurements)
-        if len(self.measurements) < 10:
-            self.measurements.append(marker_msg.color)
+        """
+        Callback to check if a marker (object) is detected. If detected, set flag to True.
+        """
+        if marker_msg.pose.position:  # Check if there is any position data in the message
+            rospy.loginfo(f"Detected object position: ({marker_msg.pose.position.x}, {marker_msg.pose.position.y})")
+            self.marker_detected = True  # Object detected
         else:
-            self.measurements[self.valCounter] = marker_msg.color
-            self.valCounter += 1
-        
-        if self.valCounter > 9:
-            self.valCounter = 0
+            rospy.loginfo("No object detected.")
+            self.marker_detected = False  # No object detected
 
     def is_point_inside_polygon(self, point_coords, boundary_coords):
         """
         Check if a given point is inside a polygon defined by boundary coordinates.
-        :param point_coords: Tuple of (x, y) coordinates for the point.
-        :param boundary_coords: List of tuples, each tuple being (x, y) coordinates of a vertex of the polygon.
-        :return: True if the point is inside the polygon, False otherwise.        if self.is_point_inside_polygon(point, self.param_at_boundaries['room_1']):
-            rospy.loginfo(f"Point {point} is inside room_1 boundaries.")
-        else:
-            rospy.loginfo(f"Point {point} is NOT inside room_1 boundaries.")
         """
         point = Point(point_coords)
         poly = Polygon(boundary_coords)
         return point.within(poly)
-    
 
-    
     def get_robot_pose_orientation(self):
         """
         Retrieves the current pose and orientation of the robot in the map frame.
         """
-
         try:
             transform = self.tf_buffer.lookup_transform('map', 'locobot/base_link', rospy.Time())
             translation = transform.transform.translation
