@@ -1,41 +1,116 @@
 #!/usr/bin/env python3
+
 import rospy
-import numpy as np
-from shapely.geometry import Point
-from shapely.geometry import Polygon
+import tf2_ros
+from locobot_learning.srv import Contain, ContainResponse
+from shapely.geometry import Point, Polygon
+from visualization_msgs.msg import Marker
+import tf2_geometry_msgs
+from geometry_msgs.msg import PointStamped
 
-from locobot_custom.srv import Contain, ContainResponse
-from gazebo_msgs.msg import ModelStates
-
-class RecycleBotGazeboContain(object):
+class RealRobotContainService(object):
 
     def __init__(self):
+        # Initialize the ROS node
+        rospy.init_node('RealRobotContainService', anonymous=True)
 
-        rospy.init_node('RecycleBotGazeboAt', anonymous=True)
+        # Fetch the boundaries from the parameter server
+        try:
+            self.param_boundaries = rospy.get_param("at_boundaries")
+        except (KeyError, rospy.ROSException):
+            rospy.logerr("Error getting boundaries parameters.")
+            raise ValueError
 
+        # Define the service for checking the containment
         self.contain_srv = rospy.Service('contain', Contain, self.contain_callback)
 
-        while not rospy.is_shutdown():
-            rospy.spin()
+        # Subscribe to the marker topic to detect objects in the bin
+        rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
+
+        # Store the most recent marker information
+        self.recent_marker = None
+
+        # TF buffer and listener for transforming coordinates
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+
+        rospy.spin()
+
+    def marker_callback(self, marker_msg):
+        """
+        Callback to detect and update objects in the bin based on markers from the perception stack.
+        """
+        if marker_msg.pose.position:  # Ensure the message contains valid position data
+            self.recent_marker = marker_msg.pose.position  # Store the recent marker position
+        else:
+            self.recent_marker = None  # No marker detected, reset the stored marker
+
+    def transform_marker_to_map_frame(self, marker_position):
+        """
+        Transforms the marker position to the map frame.
+        """
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'locobot/camera_color_optical_frame', rospy.Time())
+            
+            # Transform the marker coordinates to the map frame
+            point_in_camera = PointStamped()
+            point_in_camera.header.frame_id = 'locobot/camera_color_optical_frame'
+            point_in_camera.point = marker_position
+
+            point_in_map = tf2_geometry_msgs.do_transform_point(point_in_camera, transform)
+            return [point_in_map.point.x, point_in_map.point.y]
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logerr(f"Error transforming marker: {e}")
+            return None
 
     def contain_callback(self, req):
+        """
+        Service callback function to check if the given object is contained in the bin.
+        """
         obj = req.obj
         container = req.container
-        
+
+        # Check if the container is a bin
         if container != "bin_1":
-            return ContainResponse(False)
-        
-        model_states = rospy.wait_for_message('/gazebo/model_states', ModelStates)
-        
-        index = model_states.name.index(obj)
-        pose = model_states.pose[index]
-        position = np.array([pose.position.x, pose.position.y])
+            return ContainResponse(container_contains_obj=False)
 
-        bin_pos = np.array([4.87, 2.07])
-        bin_rad = 0.1 
+        # Get the bin boundary from the parameter server
+        bin_boundary = self.param_boundaries.get("bin_1")
+        if bin_boundary is None:
+            rospy.logerr("No bin boundary found in the parameters.")
+            return ContainResponse(container_contains_obj=False)
 
-        return ContainResponse(np.linalg.norm(position - bin_pos) < bin_rad)
-            
+        # If no marker has been detected, the object is not inside the bin
+        if self.recent_marker is None:
+            rospy.loginfo(f"Object {obj} is not detected.")
+            return ContainResponse(container_contains_obj=False)
+
+        # Transform the marker position to the map frame
+        transformed_marker = self.transform_marker_to_map_frame(self.recent_marker)
+        if transformed_marker is None:
+            rospy.logerr(f"Failed to transform marker position to map frame.")
+            return ContainResponse(container_contains_obj=False)
+
+        # Log transformed marker and bin boundary for debugging
+        rospy.loginfo(f"Transformed marker position: {transformed_marker}")
+        rospy.loginfo(f"Bin boundary: {bin_boundary}")
+
+        # Check if the marker's position is inside the bin boundary
+        if self.is_point_inside_polygon(transformed_marker, bin_boundary):
+            rospy.loginfo(f"Object {obj} is inside the bin.")
+            return ContainResponse(container_contains_obj=True)
+
+        rospy.loginfo(f"Object {obj} is not inside the bin.")
+        return ContainResponse(container_contains_obj=False)
+    
+    def is_point_inside_polygon(self, point_coords, boundary_coords):
+        """
+        Check if a given point is inside a polygon defined by boundary coordinates.
+        """
+        point = Point(point_coords)
+        polygon = Polygon(boundary_coords)
+        return point.within(polygon)
+
 
 if __name__ == "__main__":
-    RecycleBotGazeboContain()
+    RealRobotContainService()

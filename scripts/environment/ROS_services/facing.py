@@ -7,6 +7,8 @@ from shapely.geometry import Point, Polygon
 import tf2_ros
 import numpy as np
 from tf.transformations import euler_from_quaternion
+import tf2_geometry_msgs
+from geometry_msgs.msg import PointStamped
 
 class RealRobotFacing(object):
     """
@@ -19,10 +21,7 @@ class RealRobotFacing(object):
         """
         Initializes the RealRobotFacing object, sets up subscribers, service, and transformation listener.
         """
-
-        self.marker_detected = False  # Flag to indicate if a marker is detected
         self.tolerance = 0.15
-
         rospy.init_node('RealRobotFacing', anonymous=True)
 
         # Fetch parameters from ROS param server (facing boundaries and navigation goals)
@@ -35,7 +34,14 @@ class RealRobotFacing(object):
 
         # Service and subscriber
         self.facing_srv = rospy.Service('facing', Facing, self.facing_callback)
-        rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
+        
+        # Create a buffer to store recent marker messages from the topic
+        self.marker_sub = rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
+        self.recent_marker = None  # Store the recent marker message
+
+        # TF buffer and listener
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         # Map models to objects in the domain
         self.model_to_pddl_mapping = {
@@ -48,9 +54,6 @@ class RealRobotFacing(object):
             "atdoor": "atdoor",       # Add atdoor
             "postdoor": "postdoor"    # Add postdoor
         }
-
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
     def facing_callback(self, req):
         """
@@ -132,12 +135,17 @@ class RealRobotFacing(object):
 
     def facing_generic_object(self):
         """
-        Refined logic for facing a generic object:
-        1. Marker must be detected (non-stationary object).
-        2. Robot's orientation is used to determine facing.
+        Logic for facing a generic object:
+        - Check if a marker has been detected dynamically.
+        - Transform marker coordinates and use robot's orientation to determine facing.
         """
-        if not self.marker_detected:
-            rospy.loginfo("No marker detected, not facing the generic object.")
+        if self.recent_marker is None:
+            rospy.loginfo("No recent marker detected, not facing the generic object.")
+            return FacingResponse(False)
+
+        # Transform the marker position to the 'map' frame
+        transformed_marker_position = self.transform_marker_to_map_frame(self.recent_marker.pose.position)
+        if transformed_marker_position is None:
             return FacingResponse(False)
 
         robot_position, robot_pose = self.get_robot_pose_orientation()
@@ -151,7 +159,7 @@ class RealRobotFacing(object):
         """
         Check if the robot is facing 'nothing', meaning no object or marker is detected.
         """
-        if not self.marker_detected:
+        if self.recent_marker is None:
             rospy.loginfo("Robot is facing nothing.")
             return FacingResponse(True)
         else:
@@ -169,14 +177,31 @@ class RealRobotFacing(object):
 
     def marker_callback(self, marker_msg):
         """
-        Callback to check if a marker (object) is detected. If detected, set flag to True.
+        Callback to update the recent marker information from the topic.
         """
         if marker_msg.pose.position:  # Check if there is any position data in the message
             rospy.loginfo(f"Detected object position: ({marker_msg.pose.position.x}, {marker_msg.pose.position.y})")
-            self.marker_detected = True  # Object detected
+            self.recent_marker = marker_msg  # Store the recent marker message
         else:
             rospy.loginfo("No object detected.")
-            self.marker_detected = False  # No object detected
+            self.recent_marker = None  # No object detected
+
+    def transform_marker_to_map_frame(self, marker_position):
+        """
+        Transforms the marker position to the 'map' frame.
+        """
+        try:
+            transform = self.tf_buffer.lookup_transform('map', 'locobot/camera_color_optical_frame', rospy.Time())
+
+            point_in_camera = PointStamped()
+            point_in_camera.header.frame_id = 'locobot/camera_color_optical_frame'
+            point_in_camera.point = marker_position
+
+            point_in_map = tf2_geometry_msgs.do_transform_point(point_in_camera, transform)
+            return [point_in_map.point.x, point_in_map.point.y]
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logerr(f"Error transforming marker: {e}")
+            return None
 
     def is_point_inside_polygon(self, point_coords, boundary_coords):
         """
