@@ -8,6 +8,7 @@ from visualization_msgs.msg import Marker
 import tf2_geometry_msgs
 from geometry_msgs.msg import PointStamped
 
+
 class RealRobotContainService(object):
 
     def __init__(self):
@@ -24,26 +25,11 @@ class RealRobotContainService(object):
         # Define the service for checking the containment
         self.contain_srv = rospy.Service('contain', Contain, self.contain_callback)
 
-        # Subscribe to the marker topic to detect objects in the bin
-        rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
-
-        # Store the most recent marker information
-        self.recent_marker = None
-
         # TF buffer and listener for transforming coordinates
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         rospy.spin()
-
-    def marker_callback(self, marker_msg):
-        """
-        Callback to detect and update objects in the bin based on markers from the perception stack.
-        """
-        if marker_msg.pose.position:  # Ensure the message contains valid position data
-            self.recent_marker = marker_msg.pose.position  # Store the recent marker position
-        else:
-            self.recent_marker = None  # No marker detected, reset the stored marker
 
     def transform_marker_to_map_frame(self, marker_position):
         """
@@ -80,13 +66,18 @@ class RealRobotContainService(object):
             rospy.logerr("No bin boundary found in the parameters.")
             return ContainResponse(container_contains_obj=False)
 
-        # If no marker has been detected, the object is not inside the bin
-        if self.recent_marker is None:
+        # Dynamically query the marker data to check if the object is detected
+        try:
+            marker = rospy.wait_for_message("/locobot/pc_filter/markers/objects", Marker, timeout=1.0)
+            if not marker.pose.position:
+                rospy.loginfo(f"Object {obj} is not detected.")
+                return ContainResponse(container_contains_obj=False)
+        except rospy.ROSException:
             rospy.loginfo(f"Object {obj} is not detected.")
             return ContainResponse(container_contains_obj=False)
 
         # Transform the marker position to the map frame
-        transformed_marker = self.transform_marker_to_map_frame(self.recent_marker)
+        transformed_marker = self.transform_marker_to_map_frame(marker.pose.position)
         if transformed_marker is None:
             rospy.logerr(f"Failed to transform marker position to map frame.")
             return ContainResponse(container_contains_obj=False)
@@ -101,8 +92,8 @@ class RealRobotContainService(object):
             return ContainResponse(container_contains_obj=True)
 
         rospy.loginfo(f"Object {obj} is not inside the bin.")
-        return ContainResponse(container_contains_obj=False)
-    
+        return ContainResponse(container_contains_obj = False)
+
     def is_point_inside_polygon(self, point_coords, boundary_coords):
         """
         Check if a given point is inside a polygon defined by boundary coordinates.

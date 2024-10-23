@@ -32,13 +32,9 @@ class RealRobotFacing(object):
             rospy.logerr("Error getting parameters.")
             raise ValueError
 
-        # Service and subscriber
+        # Service
         self.facing_srv = rospy.Service('facing', Facing, self.facing_callback)
         
-        # Create a buffer to store recent marker messages from the topic
-        self.marker_sub = rospy.Subscriber("/locobot/pc_filter/markers/objects", Marker, self.marker_callback)
-        self.recent_marker = None  # Store the recent marker message
-
         # TF buffer and listener
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -51,8 +47,8 @@ class RealRobotFacing(object):
             "bin_1": "bin",
             "table": "table",
             "nothing": "nothing",
-            "atdoor": "atdoor",       # Add atdoor
-            "postdoor": "postdoor"    # Add postdoor
+            "atdoor": "atdoor",
+            "postdoor": "postdoor"
         }
 
     def facing_callback(self, req):
@@ -136,15 +132,16 @@ class RealRobotFacing(object):
     def facing_generic_object(self):
         """
         Logic for facing a generic object:
-        - Check if a marker has been detected dynamically.
-        - Transform marker coordinates and use robot's orientation to determine facing.
+        - Directly check if a marker is detected during the service call.
         """
-        if self.recent_marker is None:
-            rospy.loginfo("No recent marker detected, not facing the generic object.")
+        try:
+            marker = rospy.wait_for_message("/locobot/pc_filter/markers/objects", Marker, timeout=1.0)  # Wait for a new marker message
+        except rospy.ROSException:
+            rospy.loginfo("No marker detected, not facing the generic object.")
             return FacingResponse(False)
 
         # Transform the marker position to the 'map' frame
-        transformed_marker_position = self.transform_marker_to_map_frame(self.recent_marker.pose.position)
+        transformed_marker_position = self.transform_marker_to_map_frame(marker.pose.position)
         if transformed_marker_position is None:
             return FacingResponse(False)
 
@@ -159,32 +156,34 @@ class RealRobotFacing(object):
         """
         Check if the robot is facing 'nothing', meaning no object or marker is detected.
         """
-        if self.recent_marker is None:
-            rospy.loginfo("Robot is facing nothing.")
-            return FacingResponse(True)
-        else:
-            rospy.loginfo("Robot is NOT facing nothing, an object is detected.")
+        # First, check if the robot is facing any stationary object (door, bin, table, atdoor, postdoor)
+        if self.is_facing_any_stationary_object():
+            rospy.loginfo("Robot is facing a stationary object.")
             return FacingResponse(False)
+        
+        # Then, check if any marker is detected (non-stationary object)
+        try:
+            marker = rospy.wait_for_message("/locobot/pc_filter/markers/objects", Marker, timeout=1.0)
+            if marker.pose.position:  # If a marker is detected, it's not facing nothing
+                rospy.loginfo("Robot is NOT facing nothing, an object is detected.")
+                return FacingResponse(False)
+        except rospy.ROSException:
+            rospy.loginfo("No marker detected, robot is facing nothing.")
+
+        # If no stationary object is faced and no marker is detected, it's facing nothing
+        rospy.loginfo("Robot is facing nothing.")
+        return FacingResponse(True)
 
     def is_facing_any_stationary_object(self):
         """
         Check if the robot is currently facing any stationary object (door, bin, table, atdoor, postdoor).
         """
         for obj in ["door", "bin", "table", "atdoor", "postdoor"]:
+            # Only return True if facing one of the stationary objects
             if self.facing_zone(obj, obj).robot_facing_obj:
                 return True
         return False
 
-    def marker_callback(self, marker_msg):
-        """
-        Callback to update the recent marker information from the topic.
-        """
-        if marker_msg.pose.position:  # Check if there is any position data in the message
-            rospy.loginfo(f"Detected object position: ({marker_msg.pose.position.x}, {marker_msg.pose.position.y})")
-            self.recent_marker = marker_msg  # Store the recent marker message
-        else:
-            rospy.loginfo("No object detected.")
-            self.recent_marker = None  # No object detected
 
     def transform_marker_to_map_frame(self, marker_position):
         """
