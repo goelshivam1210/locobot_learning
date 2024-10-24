@@ -1,5 +1,6 @@
 import sys
 import os
+import rospy
 
 # Add the core directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'core')))
@@ -7,26 +8,21 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 script_dir = os.path.dirname(__file__)  # Get the directory of the test_planner.py script
 
 domain_file = os.path.abspath(os.path.join(script_dir, '../../knowledge/PDDL/recycle_bot/domain.pddl'))
-problem_file = os.path.abspath(os.path.join(script_dir, '../../knowledge/PDDL/recycle_bot/problem.pddl'))
 
 from planner.planner import Planner
 from PDDLActions import PDDLActions
 from Agent import Agent
 from PDDLPredicates import PDDLPredicates
+
 def test_planner():
-    # domain_file = "../../../knowledge/PDDL/recycle_bot/domain.pddl"
-    
-    def mock_predicate(*args):
-        return True
+    # Initialize ROS node (if not already initialized)
+    if not rospy.get_node_uri():
+        rospy.init_node('test_planner_node', anonymous=True)
 
-    predicate_funcs = {
-        "at": mock_predicate,
-        "connect": mock_predicate,
-        "facing": mock_predicate,
-        "hold": mock_predicate,
-        "contain": mock_predicate,
-    }
+    # Initialize the PDDLPredicates with its internal ROS service calls
+    predicates = PDDLPredicates()  # No argument required
 
+    # Object initialization (to match the domain/problem PDDL)
     objects = {
         'doorway': ['doorway_1'],
         'room': ['room_1', 'room_2'],
@@ -37,18 +33,18 @@ def test_planner():
         'robot': ['robot_1']
     }
 
-
-
-    planner = Planner(domain_file, predicate_funcs)
+    # Initialize planner without needing predicate_funcs
+    planner = Planner(domain_file)  # Remove predicate_funcs here
     planner.new_problem(objects)
 
-    actions = PDDLActions()
-    predicates = PDDLPredicates(predicate_funcs)
+    # Initialize actions and agent
+    actions = PDDLActions()  # Modify this if action execution needs ROS service calls
     agent = Agent(planner, actions, predicates)
+
+    # Run the agent to execute the plan
     agent.run(objects)
 
-    # planner.new_problem(objects)
-
+    # Check next action in the plan
     action = planner.next_action()
     if action:
         print(f"Next action: {action}")

@@ -24,27 +24,38 @@ class AtService(object):
 
         rospy.loginfo("At service is ready.")
         rospy.spin()
-    
+
     def at_callback(self, req):
         room = req.room
         obj = req.obj
         rospy.loginfo(f"Received request to check if {obj} is in {room}.")
 
+        # Map objects like ball_1 or can_1 to 'generic_object'
+        obj = self.map_to_generic_object(obj)
+
         if obj == "robot_1":
             return self.is_robot_in_room(room)
-        elif obj == "marker_1":
-            return self.is_marker_in_room(room)
+        elif obj == "marker_1" or obj == "generic_object":
+            return self.is_marker_in_room(room)  # Use marker logic for generic objects
         elif obj == "bin_1":
             return self.is_bin_in_room(room)
         else:
             rospy.logwarn(f"Object {obj} is not recognized.")
             return AtResponse(False)
 
+    def map_to_generic_object(self, obj: str) -> str:
+        """
+        Map specific objects like ball_1 or can_1 to 'generic_object'.
+        """
+        if obj in ["ball_1", "can_1"]:
+            return "generic_object"
+        return obj
+
     def is_robot_in_room(self, room):
         robot_position, _ = self.get_robot_pose_orientation()
         if robot_position is None:
             return AtResponse(False)
-        
+
         point = (robot_position[0], robot_position[1])
         boundary = self.param_at_boundaries.get(room)
 
@@ -58,25 +69,25 @@ class AtService(object):
         else:
             rospy.loginfo(f"Robot is NOT in {room}.")
             return AtResponse(False)
-    
+
     def is_marker_in_room(self, room):
-        # Example logic: Check if the marker is in the robot's gripper or in a specific room.
-        if room == "room_1":  # Simplified logic, can be expanded
+        # Simplified logic: check if the marker is in a specific room (can be expanded)
+        if room == "room_1":  # Assume the generic object is in room_1 for now
             return AtResponse(True)
         else:
             return AtResponse(False)
-    
+
     def is_bin_in_room(self, room):
         if room == "room_2":  # Simplified logic, assumes bin is always in room_2
             return AtResponse(True)
         else:
             return AtResponse(False)
-        
+
     def is_point_inside_polygon(self, point_coords, boundary_coords):
         point = Point(point_coords)
         poly = Polygon(boundary_coords)
         return point.within(poly)
-    
+
     def get_robot_pose_orientation(self):
         try:
             transform = self.tf_buffer.lookup_transform('map', 'locobot/base_link', rospy.Time())
@@ -86,6 +97,7 @@ class AtService(object):
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logerr(f"Error getting robot pose: {e}")
             return None, None
+
 
 if __name__ == "__main__":
     AtService()

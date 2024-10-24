@@ -5,7 +5,7 @@ from pddl_parser.PDDL import PDDL_Parser
 from pddl_parser.planner import Planner as PDDL_Planner
 
 class Planner:
-    def __init__(self, domain_path: str, predicate_funcs: dict):
+    def __init__(self, domain_path: str):
         self._domain_path = domain_path
         self._predicates = {}
         self._preconditions = {}
@@ -16,9 +16,6 @@ class Planner:
         self._parser.parse_domain(self._domain_path)
 
         self.__parse_predicates()
-        self.__verify_predicates(predicate_funcs)
-
-        self._predicate_funcs = predicate_funcs
         self.__parse_actions()
 
         self.pddl_planner = PDDL_Planner()  # Initialize the PDDL planner    
