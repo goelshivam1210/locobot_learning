@@ -1,7 +1,6 @@
 import rospy
 from locobot_learning.srv import Approach, GraspObject, DropObject
 
-
 class PDDLActions:
     def __init__(self):
         # Initialize ROS service proxies
@@ -9,12 +8,21 @@ class PDDLActions:
         self.grasp_service = rospy.ServiceProxy('/grasp_object', GraspObject)
         self.drop_service = rospy.ServiceProxy('/drop_object', DropObject)
 
+    def map_to_generic_object(self, obj: str) -> str:
+        """
+        Map specific objects like ball_1 or can_1 to 'generic_object' for ROS service calls.
+        """
+        if obj in ["ball_1", "can_1"]:
+            return "generic_object"
+        return obj
+
     def execute(self, action_name: str, params: list):
         """
         Executes the given action by calling the respective ROS service.
         """
         rospy.loginfo(f"Executing action: {action_name} with parameters: {params}")
         if action_name == "approach":
+            rospy.loginfo(f"Approaching {params}")
             self.approach(*params)
         elif action_name == "pick":
             self.pick(*params)
@@ -31,11 +39,16 @@ class PDDLActions:
         """
         rospy.loginfo(f"Approaching {obj} in {room} while facing {facing}.")
         try:
-            response = self.approach_service(facing)
-            if response.success:
-                rospy.loginfo(f"Successfully approached {facing}.")
+            obj = self.map_to_generic_object(obj)  # Convert to generic object
+            if facing == "nothing":
+                response = self.approach_service(obj)  # Approach without facing
             else:
-                rospy.logerr(f"Failed to approach {facing}.")
+                response = self.approach_service(facing)  # Approach with facing
+
+            if response.success:
+                rospy.loginfo(f"Successfully approached {obj}.")
+            else:
+                rospy.logerr(f"Failed to approach {obj}.")
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
 
@@ -45,7 +58,8 @@ class PDDLActions:
         """
         rospy.loginfo(f"Picking up {obj} in {room}.")
         try:
-            response = self.grasp_service("generic_object")
+            obj = self.map_to_generic_object(obj)  # Convert to generic object
+            response = self.grasp_service(obj)
             if response.success:
                 rospy.loginfo(f"Successfully picked up {obj}.")
             else:
@@ -59,11 +73,12 @@ class PDDLActions:
         """
         rospy.loginfo(f"Placing {obj} in {container} in {room}.")
         try:
+            obj = self.map_to_generic_object(obj)  # Convert to generic object
             response = self.drop_service()
             if response.success:
-                rospy.loginfo(f"Successfully placed {obj} in {container}.")
+                rospy.loginfo(f"Successfully placed {obj}.")
             else:
-                rospy.logerr(f"Failed to place {obj} in {container}.")
+                rospy.logerr(f"Failed to place {obj}.")
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
 

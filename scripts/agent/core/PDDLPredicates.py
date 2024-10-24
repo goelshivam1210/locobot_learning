@@ -40,23 +40,6 @@ class PDDLPredicates:
                 return False
         return True
 
-    def check_effects(self, action_name: str, params: list) -> bool:
-        """
-        Evaluate effects using predicate functions.
-        """
-        relevant_predicates = {
-            "approach": [("check_facing", [0])],
-            "pick": [("check_hold", [0])],
-            "pass_through_door": [("check_at", [1, 2])],
-            "place": [("check_contain", [0, 1])],
-        }
-
-        for pred_name, arg_indices in relevant_predicates.get(action_name, []):
-            args = [params[i] for i in arg_indices]
-            if not getattr(self, pred_name)(*args):
-                return False
-        return True
-
     # ROS service calls for predicates
     def check_at(self, obj: str, room: str) -> bool:
         """
@@ -94,14 +77,3 @@ class PDDLPredicates:
             rospy.logerr(f"Service call failed: {e}")
             return False
 
-    def check_contain(self, obj: str, container: str) -> bool:
-        """
-        Check if the object is contained in the specified container (e.g., bin).
-        """
-        obj = self.map_to_generic_object(obj)  # Map specific object to generic object
-        try:
-            response = self.contain_service(ContainRequest(obj=obj, container=container))
-            return response.container_contains_obj
-        except rospy.ServiceException as e:
-            rospy.logerr(f"Service call failed: {e}")
-            return False

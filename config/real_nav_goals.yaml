@@ -1,5 +1,5 @@
 real_nav_goals:
-  marker:
+  generic_object:
     position:
       x: -0.604
       y: -1.580
