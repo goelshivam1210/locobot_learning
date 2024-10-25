@@ -51,7 +51,7 @@ class PDDLActions:
                 rospy.logerr(f"Failed to approach {obj}.")
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
-
+            
     def pick(self, obj, room):
         """
         Calls the grasp_object service with the 'generic object' argument.
@@ -61,11 +61,14 @@ class PDDLActions:
             obj = self.map_to_generic_object(obj)  # Convert to generic object
             response = self.grasp_service(obj)
             if response.success:
-                rospy.loginfo(f"Successfully picked up {obj}.")
+                rospy.loginfo(f"Successfully picked up {obj}. Robot is now holding the object.")
             else:
-                rospy.logerr(f"Failed to pick up {obj}.")
+                rospy.logerr(f"Failed to pick up {obj}. The robot is not holding the object.")
+            return response.success  # Return whether the robot is holding the object or not
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
+            return False
+
 
     def place(self, obj, room, container):
         """
