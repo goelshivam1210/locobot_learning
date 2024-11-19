@@ -17,36 +17,30 @@ class PDDLPredicates:
             return "generic_object"
         return obj
 
-
     def check_preconditions(self, action_name: str, params: list) -> bool:
         """
         Evaluate preconditions for the given action with logging for failures.
         """
         relevant_predicates = {
             "approach": [("check_at", [0, 1]), ("check_facing", [2])],
-            "pick": [("check_at", [0, 1]), ("check_facing", [0]), ("check_hold", ["nothing"])],  # Check holding nothing
-            "pass_through_door": [("check_at", [0, 1]), ("check_facing", [2])],
+            "pick": [("check_at", [0, 1]), ("check_facing", [0]), ("check_hold", ["nothing"])],
+            "pass_through_door": [("check_at", ["robot_1", 0]), ("check_facing", [2])],
             "place": [("check_at", [0, 1]), ("check_facing", [2]), ("check_hold", [0])],
         }
+
 
         rospy.loginfo(f"Checking preconditions for action: {action_name}")
 
         for pred_name, arg_indices in relevant_predicates.get(action_name, []):
-            # Skip 'facing' check if it's against "nothing"
-            if pred_name == "check_facing" and params[arg_indices[0]] == "nothing":
-                continue
-
-            # Handle "hold nothing" check for pick
-            if pred_name == "check_hold" and "nothing" in arg_indices:
-                args = ["nothing"]  # Correctly pass "nothing" to the hold check
-            else:
-                args = [self.map_to_generic_object(params[i]) for i in arg_indices]
+            # Handle constants and dynamic indices
+            args = [self.map_to_generic_object(params[i]) if isinstance(i, int) else i for i in arg_indices]
 
             rospy.loginfo(f"Checking {pred_name} with args: {args}")
             if not getattr(self, pred_name)(*args):
                 rospy.logwarn(f"Precondition failed: {pred_name} with args: {args}")
                 return False
         return True
+
 
 
 
@@ -57,44 +51,53 @@ class PDDLPredicates:
         relevant_predicates = {
             "approach": [("check_facing", [0])],
             "pick": [("check_hold", [0])],
-            "pass_through_door": [("check_at", [1, 2])],
+            "pass_through_door": [("check_at", ["robot_1", 1]), ("check_facing", ["nothing"])],
             "place": [("check_contain", [0, 1])],
         }
 
         rospy.loginfo(f"Checking effects for action: {action_name}")
 
         for pred_name, arg_indices in relevant_predicates.get(action_name, []):
-            args = [self.map_to_generic_object(params[i]) for i in arg_indices]
+            # Handle constants and dynamic indices
+            args = [self.map_to_generic_object(params[i]) if isinstance(i, int) else i for i in arg_indices]
+
             rospy.loginfo(f"Checking {pred_name} with args: {args}")
             if not getattr(self, pred_name)(*args):
                 rospy.logwarn(f"Effect failed: {pred_name} with args: {args}")
                 return False
         return True
 
+
     # ROS service calls for predicates
     def check_at(self, obj: str, room: str) -> bool:
-        """
-        Check if the object is at the specified room.
-        """
-        obj = self.map_to_generic_object(obj)  # Map specific object to generic object
+        rospy.loginfo(f"Checking if {obj} is in {room}.")
+        obj = self.map_to_generic_object(obj)
         try:
             response = self.at_service(AtRequest(room=room, obj=obj))
+            rospy.loginfo(f"check_at result: {response.obj_at_room} for {obj} in {room}")
             return response.obj_at_room
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
             return False
 
+
     def check_facing(self, obj: str) -> bool:
         """
-        Check if the robot is facing the specified object.
+        Check if the robot is facing the specified object or doorway.
         """
-        obj = self.map_to_generic_object(obj)  # Map specific object to generic object
+        obj = self.map_to_generic_object(obj)
+        if "doorway" in obj:
+            rospy.loginfo(f"Assuming the robot can face doorway: {obj}")
+            return True  # Assume true for doorways, or add specific facing logic for doorways if needed
+        
         try:
             response = self.facing_service(FacingRequest(obj=obj))
+            rospy.loginfo(f"Robot is facing {obj}: {response.robot_facing_obj}")
             return response.robot_facing_obj
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
             return False
+
 
     def check_hold(self, obj: str) -> bool:
         """
@@ -128,3 +131,55 @@ class PDDLPredicates:
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
             return False
+
+
+    def get_robot_location(self) -> str:
+        """
+        Get the current location of the robot.
+        """
+        try:
+            # Assume the robot's location can be determined via the 'at' service
+            for room in ["room_1", "room_2"]:  # Iterate over possible rooms
+                response = self.check_at("robot_1", room)
+                if response:
+                    return room
+        except Exception as e:
+            rospy.logerr(f"Error getting robot location: {e}")
+        return "unknown"
+
+    def get_robot_facing(self) -> str:
+        """
+        Get the object or direction the robot is currently facing.
+        """
+        try:
+            for obj in ["nothing", "ball_1", "can_1", "doorway_1", "bin_1"]:  # Iterate over facable objects
+                response = self.check_facing(obj)
+                if response:
+                    return obj
+        except Exception as e:
+            rospy.logerr(f"Error getting robot facing direction: {e}")
+        return "unknown"
+
+    def get_robot_holding(self) -> str:
+        """
+        Get the object the robot is currently holding, or "nothing".
+        """
+        try:
+            for obj in ["nothing", "ball_1", "can_1"]:  # Iterate over holdable objects
+                if self.check_hold(obj):
+                    return obj
+        except Exception as e:
+            rospy.logerr(f"Error getting robot holding state: {e}")
+        return "unknown"
+
+    def get_object_location(self, obj: str) -> str:
+        """
+        Get the current location of the specified object.
+        """
+        try:
+            for room in ["room_1", "room_2"]:  # Iterate over possible rooms
+                if self.check_at(obj, room):
+                    return room
+        except Exception as e:
+            rospy.logerr(f"Error getting location for object {obj}: {e}")
+        return "unknown"

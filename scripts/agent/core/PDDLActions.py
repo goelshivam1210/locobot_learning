@@ -14,7 +14,12 @@ class PDDLActions:
         """
         if obj in ["ball_1", "can_1"]:
             return "generic_object"
+        if obj in ["doorway_1"]:
+            return "atdoor"
+        if obj in ['bin_1']:
+            return "bin"
         return obj
+
 
     def execute(self, action_name: str, params: list):
         """

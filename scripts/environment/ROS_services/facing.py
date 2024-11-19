@@ -48,7 +48,8 @@ class RealRobotFacing(object):
             "table": "table",
             "nothing": "nothing",
             "atdoor": "atdoor",
-            "postdoor": "postdoor"
+            "postdoor": "postdoor",
+            "doorway_1": "doorway_1"
         }
 
     def facing_callback(self, req):
@@ -61,13 +62,49 @@ class RealRobotFacing(object):
 
         model = self.model_to_pddl_mapping[req.obj]
 
-        if model in ["door", "bin", "table", "atdoor", "postdoor"]:
+        # Special handling for postdoor
+        if model == "postdoor":
+            return self.facing_nothing()
+
+        if model in ["door", "bin", "table", "atdoor", "doorway_1"]:
             return self.facing_zone(model, req.obj)
+
         elif model == "generic_object":
             if not self.is_facing_any_stationary_object():
                 return self.facing_generic_object()
 
         return self.facing_nothing()
+
+
+
+    def facing_doorway(self, model):
+        """
+        Logic for checking if the robot is facing the doorway.
+        """
+        robot_position, robot_pose = self.get_robot_pose_orientation()
+        if robot_position is None or robot_pose is None:
+            return FacingResponse(False)
+
+        x_pos, y_pos = robot_position[0], robot_position[1]
+
+        # Convert orientation to yaw
+        _, _, yaw = euler_from_quaternion(robot_pose)
+
+        # Get doorway boundary and orientation
+        boundary = self.param_facing_boundaries.get(model, {}).get('boundary', None)
+        if not boundary:
+            rospy.logerr(f"Boundary not found for {model}.")
+            return FacingResponse(False)
+
+        yaw_threshold = self.param_facing_boundaries.get(model, {}).get('threshold', 0.5)
+        goal_yaw = self.get_goal_yaw_from_nav_goals(model)
+
+        if self.is_point_inside_polygon((x_pos, y_pos), boundary) and (goal_yaw - yaw_threshold <= yaw <= goal_yaw + yaw_threshold):
+            rospy.loginfo(f"Robot is facing the doorway: {model}.")
+            return FacingResponse(True)
+
+        rospy.loginfo(f"Robot is NOT facing the doorway: {model}.")
+        return FacingResponse(False)
 
     def facing_zone(self, model, obj):
         """
@@ -82,138 +119,88 @@ class RealRobotFacing(object):
             return FacingResponse(False)
 
         x_pos, y_pos = robot_position[0], robot_position[1]
-
-        rospy.loginfo(f"Robot X position: {x_pos}, Y position: {y_pos}")
-
-        point = (x_pos, y_pos)
-
-        # Convert the robot's quaternion orientation to Euler angles (yaw)
         _, _, yaw = euler_from_quaternion(robot_pose)
 
-        # Extract the boundary and threshold for stationary objects
         boundary = self.param_facing_boundaries.get(model, {}).get('boundary', None)
         if not boundary:
             rospy.logerr(f"Boundary not found for {model}")
             return FacingResponse(False)
 
-        yaw_threshold = self.param_facing_boundaries.get(model, {}).get('threshold', 0.5)  # Default yaw threshold
-
-        # Extract target yaw from real_nav_goals.yaml
+        yaw_threshold = self.param_facing_boundaries.get(model, {}).get('threshold', 0.5)
         goal_yaw = self.get_goal_yaw_from_nav_goals(model)
 
-        # Yaw thresholds for model (e.g., table, bin, atdoor, or postdoor)
-        lower_orientation = goal_yaw - yaw_threshold
-        upper_orientation = goal_yaw + yaw_threshold
-        
-        rospy.loginfo(f"Yaw: {yaw}")
-        rospy.loginfo(f"Yaw lower limit: {lower_orientation}, Yaw upper limit: {upper_orientation}")
-
-        if self.is_point_inside_polygon(point, boundary):
-            # Check if the robot is facing the stationary object (table/bin/door/atdoor/postdoor)
-            if lower_orientation <= yaw <= upper_orientation:
-                rospy.loginfo(f"Robot is facing {obj}.")
-                return FacingResponse(True)
+        if self.is_point_inside_polygon((x_pos, y_pos), boundary) and (goal_yaw - yaw_threshold <= yaw <= goal_yaw + yaw_threshold):
+            rospy.loginfo(f"Robot is facing {obj}.")
+            return FacingResponse(True)
 
         rospy.loginfo(f"Robot is NOT facing {obj}.")
         return FacingResponse(False)
 
+    def facing_nothing(self):
+        """
+        Determine if the robot is facing 'nothing' based on its position and orientation.
+        """
+        robot_position, robot_pose = self.get_robot_pose_orientation()
+        if robot_position is None or robot_pose is None:
+            return FacingResponse(False)
+
+        x_pos, y_pos = robot_position[0], robot_position[1]
+        _, _, yaw = euler_from_quaternion(robot_pose)
+
+        # Define thresholds for being "postdoor" and "nothing"
+        postdoor_boundary = self.param_facing_boundaries.get("postdoor", {}).get("boundary", [])
+        yaw_threshold = self.param_facing_boundaries.get("postdoor", {}).get("threshold", 0.5)
+
+        if not postdoor_boundary:
+            rospy.logerr("Boundary for postdoor not found.")
+            return FacingResponse(False)
+
+        # Extract goal yaw for postdoor
+        postdoor_goal_yaw = self.get_goal_yaw_from_nav_goals("postdoor")
+
+        # Check if the robot is in the postdoor region
+        if self.is_point_inside_polygon((x_pos, y_pos), postdoor_boundary):
+            lower_orientation = postdoor_goal_yaw - yaw_threshold
+            upper_orientation = postdoor_goal_yaw + yaw_threshold
+
+            rospy.loginfo(f"Yaw: {yaw}, Postdoor range: {lower_orientation} to {upper_orientation}")
+
+            # If the robot is in postdoor region and not oriented towards the doorway, it is facing nothing
+            if not (lower_orientation <= yaw <= upper_orientation):
+                rospy.loginfo("Robot is in postdoor region and oriented away. Facing nothing.")
+                return FacingResponse(True)
+
+        # If no other objects are detected, fallback to facing nothing
+        if not self.is_facing_any_stationary_object():
+            rospy.loginfo("No other objects detected. Robot is facing nothing.")
+            return FacingResponse(True)
+
+        rospy.loginfo("Robot is NOT facing nothing.")
+        return FacingResponse(False)
+
+
+
     def get_goal_yaw_from_nav_goals(self, model):
-        """
-        Extract yaw (orientation) from real_nav_goals.yaml for the given model (table, bin, atdoor, postdoor, etc.).
-        """
         try:
             quaternion = self.param_nav_goals[model]['orientation']
             _, _, goal_yaw = euler_from_quaternion([quaternion['x'], quaternion['y'], quaternion['z'], quaternion['w']])
             return goal_yaw
         except KeyError:
             rospy.logerr(f"No yaw found for {model} in real_nav_goals.yaml.")
-            return 0  # Default value
-
-    def facing_generic_object(self):
-        """
-        Logic for facing a generic object:
-        - Directly check if a marker is detected during the service call.
-        """
-        try:
-            marker = rospy.wait_for_message("/locobot/pc_filter/markers/objects", Marker, timeout=1.0)  # Wait for a new marker message
-        except rospy.ROSException:
-            rospy.loginfo("No marker detected, not facing the generic object.")
-            return FacingResponse(False)
-
-        # Transform the marker position to the 'map' frame
-        transformed_marker_position = self.transform_marker_to_map_frame(marker.pose.position)
-        if transformed_marker_position is None:
-            return FacingResponse(False)
-
-        robot_position, robot_pose = self.get_robot_pose_orientation()
-        if robot_position is None or robot_pose is None:
-            return FacingResponse(False)
-
-        rospy.loginfo("Marker detected, robot is facing the generic object.")
-        return FacingResponse(True)
-
-    def facing_nothing(self):
-        """
-        Check if the robot is facing 'nothing', meaning no object or marker is detected.
-        """
-        # First, check if the robot is facing any stationary object (door, bin, table, atdoor, postdoor)
-        if self.is_facing_any_stationary_object():
-            rospy.loginfo("Robot is facing a stationary object.")
-            return FacingResponse(False)
-        
-        # Then, check if any marker is detected (non-stationary object)
-        try:
-            marker = rospy.wait_for_message("/locobot/pc_filter/markers/objects", Marker, timeout=1.0)
-            if marker.pose.position:  # If a marker is detected, it's not facing nothing
-                rospy.loginfo("Robot is NOT facing nothing, an object is detected.")
-                return FacingResponse(False)
-        except rospy.ROSException:
-            rospy.loginfo("No marker detected, robot is facing nothing.")
-
-        # If no stationary object is faced and no marker is detected, it's facing nothing
-        rospy.loginfo("Robot is facing nothing.")
-        return FacingResponse(True)
+            return 0
 
     def is_facing_any_stationary_object(self):
-        """
-        Check if the robot is currently facing any stationary object (door, bin, table, atdoor, postdoor).
-        """
         for obj in ["door", "bin", "table", "atdoor", "postdoor"]:
-            # Only return True if facing one of the stationary objects
             if self.facing_zone(obj, obj).robot_facing_obj:
                 return True
         return False
 
-
-    def transform_marker_to_map_frame(self, marker_position):
-        """
-        Transforms the marker position to the 'map' frame.
-        """
-        try:
-            transform = self.tf_buffer.lookup_transform('map', 'locobot/camera_color_optical_frame', rospy.Time())
-
-            point_in_camera = PointStamped()
-            point_in_camera.header.frame_id = 'locobot/camera_color_optical_frame'
-            point_in_camera.point = marker_position
-
-            point_in_map = tf2_geometry_msgs.do_transform_point(point_in_camera, transform)
-            return [point_in_map.point.x, point_in_map.point.y]
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            rospy.logerr(f"Error transforming marker: {e}")
-            return None
-
     def is_point_inside_polygon(self, point_coords, boundary_coords):
-        """
-        Check if a given point is inside a polygon defined by boundary coordinates.
-        """
         point = Point(point_coords)
         poly = Polygon(boundary_coords)
         return point.within(poly)
 
     def get_robot_pose_orientation(self):
-        """
-        Retrieves the current pose and orientation of the robot in the map frame.
-        """
         try:
             transform = self.tf_buffer.lookup_transform('map', 'locobot/base_link', rospy.Time())
             translation = transform.transform.translation
@@ -222,7 +209,6 @@ class RealRobotFacing(object):
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logerr(f"Error getting transform: {e}")
             return None, None
-
 
 if __name__ == "__main__":
     RealRobotFacing()

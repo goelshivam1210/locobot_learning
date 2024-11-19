@@ -33,6 +33,11 @@ class AtService(object):
         # Map objects like ball_1 or can_1 to 'generic_object'
         obj = self.map_to_generic_object(obj)
 
+        # Special case: Always true if checking doorway_1 between room_1 and room_2
+        if obj == "doorway_1" and (room == "room_1" or room == "room_2"):
+            rospy.loginfo(f"{obj} is permanently connected to {room}.")
+            return AtResponse(True)
+
         if obj == "robot_1":
             return self.is_robot_in_room(room)
         elif obj == "marker_1" or obj == "generic_object":
@@ -42,6 +47,8 @@ class AtService(object):
         else:
             rospy.logwarn(f"Object {obj} is not recognized.")
             return AtResponse(False)
+
+
 
     def map_to_generic_object(self, obj: str) -> str:
         """

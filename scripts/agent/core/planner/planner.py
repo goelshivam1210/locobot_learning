@@ -32,15 +32,15 @@ class Planner:
                 return False
         return True
 
-    def generate_problem_str(self, objects: dict) -> str:
+    def generate_problem_str(self, objects: dict, current_state: dict) -> str:
         """
         Generate a PDDL problem string based on the current state of the world.
         Args:
             objects (dict): Dictionary containing objects and their states.
+            current_state (dict): Dictionary containing the dynamic state of the world.
         Returns:
             str: The problem file content as a string.
         """
-        # Start building the problem definition
         problem_str = f"(define (problem recycle) (:domain recycle_bot)\n"
         problem_str += "(:objects \n"
         
@@ -53,55 +53,155 @@ class Planner:
         # Add fixed connections
         problem_str += "    (connect room_1 room_2 doorway_1)\n"
         problem_str += "    (connect room_2 room_1 doorway_1)\n"
+
+        # Add always-true states
+        problem_str += "    (at room_2 doorway_1)\n"
+        problem_str += "    (at room_1 doorway_1)\n"
+
+        # Add dynamic initial states from current_state
+        robot_location = current_state['robot_location']
+        problem_str += f"    (at {robot_location} robot_1)\n"
+
+        robot_facing = current_state['robot_facing']
+        problem_str += f"    (facing {robot_facing})\n"
+
+        robot_holding = current_state['robot_holding']
+        problem_str += f"    (hold {robot_holding})\n"
+
+        for obj, location in current_state['object_locations'].items():
+            problem_str += f"    (at {location} {obj})\n"
         
-        # Add initial states
-        for obj_type, obj_list in objects.items():
-            if obj_type == "room" or obj_type == "nothing":
-                continue  # Skip rooms and 'nothing'
-            for obj in obj_list:
-                # Correct object placement
-                if obj == "bin_1":
-                    problem_str += f"    (at room_2 {obj})\n"
-                else:
-                    problem_str += f"    (at room_1 {obj})\n"
-        
-        problem_str += "    (facing nothing)\n"
-        problem_str += "    (hold nothing)\n"
         problem_str += ")\n\n(:goal (and\n"
         problem_str += "    (contain ball_1 bin_1)\n"
         problem_str += "))\n)"
 
         return problem_str
 
-    def generate_plan_str(self, objects) -> str:
+
+    def generate_plan_str(self, objects, current_state) -> str:
+        """
+        Generate a plan string by invoking the PDDL planner and applying post-processing.
+        """
         problem_file = "temp_problem.pddl"  # Temporary filename for the problem
         with open(problem_file, 'w') as file:
-            file.write(self.generate_problem_str(objects))
+            file.write(self.generate_problem_str(objects, current_state))  # Pass current_state
 
         # Call the PDDL planner to generate a plan
         plan = self.pddl_planner.solve(self._domain_path, problem_file)
 
-        print (f"plan = {plan}")
-        
+        print(f"Plan from PDDLParser = {plan}")
+
         if plan is None:
             return "No plan found"
 
+        # Post-process the plan to fix inconsistencies
+        corrected_plan = self.post_process_plan(plan)
+
+        # Convert the corrected plan to a string
         plan_str = ""
-        for act in plan:
+        for act in corrected_plan:
             plan_str += f"{act.name} {' '.join(act.parameters)}\n"
 
         return plan_str
 
-    def new_problem(self, objects: dict):
-        problem_str = self.generate_problem_str(objects)
+    def new_problem(self, objects: dict, current_state: dict):
+        """
+        Create a new planning problem based on the current state.
+        """
+        problem_str = self.generate_problem_str(objects, current_state)
         print("Generated problem file:")
         print(problem_str)
 
-        plan_str = self.generate_plan_str(objects)
+        plan_str = self.generate_plan_str(objects, current_state)  # Pass current_state here
         print("Generated plan file:")
         print(plan_str)
 
         self.__create_action_generator(plan_str)
+
+
+
+
+    def post_process_plan(self, plan):
+        """
+        Adjust the generated plan to account for runtime state changes like
+        the robot's facing direction.
+        """
+        corrected_plan = []
+        current_facing = "nothing"  # Start with the initial facing direction
+        
+        for act in plan:
+            action_name = act.name
+            parameters = list(act.parameters)  # Convert to list for mutability
+
+            if action_name == "approach":
+                # Update the third parameter to match the current facing direction
+                parameters[2] = current_facing
+                current_facing = parameters[0]  # Update the current facing to the approached object
+            elif action_name == "pick":
+                current_facing = "nothing"  # After picking, robot faces nothing
+            elif action_name == "pass_through_door":
+                # Maintain facing direction as the doorway
+                current_facing = parameters[2]  # The doorway remains the facing direction after passing through
+            elif action_name == "place":
+                current_facing = "nothing"  # After placing, reset facing to nothing
+            
+            # Create a corrected action by copying the existing action and updating parameters
+            corrected_action = self.copy_action_with_parameters(act, tuple(parameters))
+            corrected_plan.append(corrected_action)
+        
+        return corrected_plan
+
+    def copy_action_with_parameters(self, action, parameters):
+        """
+        Create a copy of the given action with updated parameters.
+        """
+        return action.__class__(
+            action.name,
+            parameters,
+            action.positive_preconditions,
+            action.negative_preconditions,
+            action.add_effects,
+            action.del_effects
+        )
+
+    # def generate_plan_str(self, objects) -> str:
+    #     """
+    #     Generate a plan string by invoking the PDDL planner and applying post-processing.
+    #     """
+    #     problem_file = "temp_problem.pddl"  # Temporary filename for the problem
+    #     with open(problem_file, 'w') as file:
+    #         file.write(self.generate_problem_str(objects))
+
+    #     # Call the PDDL planner to generate a plan
+    #     plan = self.pddl_planner.solve(self._domain_path, problem_file)
+
+    #     print(f"Plan from PDDLParser = {plan}")
+
+    #     if plan is None:
+    #         return "No plan found"
+
+    #     # Post-process the plan to fix inconsistencies
+    #     corrected_plan = self.post_process_plan(plan)
+
+    #     # Convert the corrected plan to a string
+    #     plan_str = ""
+    #     for act in corrected_plan:
+    #         plan_str += f"{act.name} {' '.join(act.parameters)}\n"
+
+    #     return plan_str
+
+
+    # def new_problem(self, objects: dict, current_state: dict):
+    #     problem_str = self.generate_problem_str(objects, current_state)
+    #     print("Generated problem file:")
+    #     print(problem_str)
+
+    #     plan_str = self.generate_plan_str(objects)
+    #     print("Generated plan file:")
+    #     print(plan_str)
+
+    #     self.__create_action_generator(plan_str)
+
     
     def next_action(self) -> str:
         try:

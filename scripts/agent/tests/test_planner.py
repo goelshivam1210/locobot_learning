@@ -19,8 +19,21 @@ def test_planner():
     if not rospy.get_node_uri():
         rospy.init_node('test_planner_node', anonymous=True)
 
-    # Initialize the PDDLPredicates with its internal ROS service calls
-    predicates = PDDLPredicates()  # No argument required
+    # Initialize the PDDLPredicates to query the current state dynamically
+    predicates = PDDLPredicates()
+
+    # Dynamically fetch the current state of the world
+    current_state = {
+        'robot_location': predicates.get_robot_location(),
+        'robot_facing': predicates.get_robot_facing(),
+        'robot_holding': predicates.get_robot_holding(),
+        'object_locations': {
+            'ball_1': predicates.get_object_location('ball_1'),
+            'bin_1': predicates.get_object_location('bin_1'),
+            'can_1': predicates.get_object_location('can_1'),
+            # Add other objects dynamically as needed
+        }
+    }
 
     # Object initialization (to match the domain/problem PDDL)
     objects = {
@@ -33,12 +46,14 @@ def test_planner():
         'robot': ['robot_1']
     }
 
-    # Initialize planner without needing predicate_funcs
-    planner = Planner(domain_file)  # Remove predicate_funcs here
-    planner.new_problem(objects)
+    # Initialize the planner with the domain
+    planner = Planner(domain_file)
+
+    # Generate a new problem dynamically using the current state
+    planner.new_problem(objects, current_state)
 
     # Initialize actions and agent
-    actions = PDDLActions()  # Modify this if action execution needs ROS service calls
+    actions = PDDLActions()
     agent = Agent(planner, actions, predicates)
 
     # Run the agent to execute the plan
@@ -50,6 +65,7 @@ def test_planner():
         print(f"Next action: {action}")
     else:
         print("No actions in the plan or plan generation failed.")
+
 
 if __name__ == "__main__":
     test_planner()
