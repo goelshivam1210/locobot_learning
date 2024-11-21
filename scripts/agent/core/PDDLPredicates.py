@@ -28,19 +28,20 @@ class PDDLPredicates:
             "place": [("check_at", [0, 1]), ("check_facing", [2]), ("check_hold", [0])],
         }
 
-
         rospy.loginfo(f"Checking preconditions for action: {action_name}")
 
         for pred_name, arg_indices in relevant_predicates.get(action_name, []):
             # Handle constants and dynamic indices
-            args = [self.map_to_generic_object(params[i]) if isinstance(i, int) else i for i in arg_indices]
+            args = [
+                params[i] if isinstance(i, int) else i  # Use index for integers, use the constant for strings
+                for i in arg_indices
+            ]
 
             rospy.loginfo(f"Checking {pred_name} with args: {args}")
             if not getattr(self, pred_name)(*args):
                 rospy.logwarn(f"Precondition failed: {pred_name} with args: {args}")
                 return False
         return True
-
 
 
 
@@ -59,13 +60,17 @@ class PDDLPredicates:
 
         for pred_name, arg_indices in relevant_predicates.get(action_name, []):
             # Handle constants and dynamic indices
-            args = [self.map_to_generic_object(params[i]) if isinstance(i, int) else i for i in arg_indices]
+            args = [
+                params[i] if isinstance(i, int) else i  # Use index for integers, use the constant for strings
+                for i in arg_indices
+            ]
 
             rospy.loginfo(f"Checking {pred_name} with args: {args}")
             if not getattr(self, pred_name)(*args):
                 rospy.logwarn(f"Effect failed: {pred_name} with args: {args}")
                 return False
         return True
+
 
 
     # ROS service calls for predicates
@@ -81,15 +86,11 @@ class PDDLPredicates:
             return False
 
 
+
     def check_facing(self, obj: str) -> bool:
         """
-        Check if the robot is facing the specified object or doorway.
+        Check if the robot is facing the specified object.
         """
-        obj = self.map_to_generic_object(obj)
-        if "doorway" in obj:
-            rospy.loginfo(f"Assuming the robot can face doorway: {obj}")
-            return True  # Assume true for doorways, or add specific facing logic for doorways if needed
-        
         try:
             response = self.facing_service(FacingRequest(obj=obj))
             rospy.loginfo(f"Robot is facing {obj}: {response.robot_facing_obj}")

@@ -1,6 +1,9 @@
 import rospy
 from locobot_learning.srv import Approach, GraspObject, DropObject
 
+import rospy
+from locobot_learning.srv import Approach, GraspObject, DropObject
+
 class PDDLActions:
     def __init__(self):
         # Initialize ROS service proxies
@@ -8,27 +11,13 @@ class PDDLActions:
         self.grasp_service = rospy.ServiceProxy('/grasp_object', GraspObject)
         self.drop_service = rospy.ServiceProxy('/drop_object', DropObject)
 
-    def map_to_generic_object(self, obj: str) -> str:
-        """
-        Map specific objects like ball_1 or can_1 to 'generic_object' for ROS service calls.
-        """
-        if obj in ["ball_1", "can_1"]:
-            return "generic_object"
-        if obj in ["doorway_1"]:
-            return "atdoor"
-        if obj in ['bin_1']:
-            return "bin"
-        return obj
-
-
     def execute(self, action_name: str, params: list):
         """
         Executes the given action by calling the respective ROS service.
         """
         rospy.loginfo(f"Executing action: {action_name} with parameters: {params}")
         if action_name == "approach":
-            rospy.loginfo(f"Approaching {params}")
-            self.approach(*params)
+            self.approach(*params)  # Pass the parameters to the approach method
         elif action_name == "pick":
             self.pick(*params)
         elif action_name == "place":
@@ -40,23 +29,36 @@ class PDDLActions:
 
     def approach(self, obj, room, facing):
         """
-        Calls the approach service.
+        Calls the approach service with the necessary parameters.
+        Maps the object to the correct format and calls the service.
         """
         rospy.loginfo(f"Approaching {obj} in {room} while facing {facing}.")
         try:
-            obj = self.map_to_generic_object(obj)  # Convert to generic object
-            if facing == "nothing":
-                response = self.approach_service(obj)  # Approach without facing
-            else:
-                response = self.approach_service(facing)  # Approach with facing
+            # Map object to the correct format expected by the service
+            target = self.map_to_generic_object(obj)
+            rospy.loginfo(f"Mapped object: {obj} -> Target: {target}")
 
+            # Call the approach service with the mapped target
+            response = self.approach_service(target)
             if response.success:
                 rospy.loginfo(f"Successfully approached {obj}.")
             else:
                 rospy.logerr(f"Failed to approach {obj}.")
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
-            
+
+    def map_to_generic_object(self, obj: str) -> str:
+        """
+        Map specific objects like ball_1 or can_1 to 'generic_object' for ROS service calls.
+        """
+        if obj in ["ball_1", "can_1"]:
+            return "generic_object"
+        if obj == "doorway_1":
+            return "atdoor"
+        if obj == "bin_1":
+            return "bin"
+        return obj
+
     def pick(self, obj, room):
         """
         Calls the grasp_object service with the 'generic object' argument.
@@ -73,7 +75,6 @@ class PDDLActions:
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
             return False
-
 
     def place(self, obj, room, container):
         """

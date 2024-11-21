@@ -4,10 +4,9 @@ from shapely.geometry import Point, Polygon
 import tf2_ros
 import numpy as np
 
-from locobot_learning.srv import At, AtResponse
+from locobot_learning.srv import At, AtResponse, Hold, HoldRequest
 
-class AtService(object):
-
+class AtService:
     def __init__(self):
         rospy.init_node('AtService', anonymous=True)
         self.at_srv = rospy.Service('at', At, self.at_callback)
@@ -26,6 +25,9 @@ class AtService(object):
         rospy.spin()
 
     def at_callback(self, req):
+        """
+        Callback to check if an object is in a specific room.
+        """
         room = req.room
         obj = req.obj
         rospy.loginfo(f"Received request to check if {obj} is in {room}.")
@@ -38,6 +40,10 @@ class AtService(object):
             rospy.loginfo(f"{obj} is permanently connected to {room}.")
             return AtResponse(True)
 
+        # If the robot is holding the object, check the robot's location
+        if obj == "generic_object" and self.is_robot_holding_object():
+            return self.is_object_with_robot_in_room(room)
+
         if obj == "robot_1":
             return self.is_robot_in_room(room)
         elif obj == "marker_1" or obj == "generic_object":
@@ -48,8 +54,6 @@ class AtService(object):
             rospy.logwarn(f"Object {obj} is not recognized.")
             return AtResponse(False)
 
-
-
     def map_to_generic_object(self, obj: str) -> str:
         """
         Map specific objects like ball_1 or can_1 to 'generic_object'.
@@ -59,6 +63,9 @@ class AtService(object):
         return obj
 
     def is_robot_in_room(self, room):
+        """
+        Check if the robot is in a specific room.
+        """
         robot_position, _ = self.get_robot_pose_orientation()
         if robot_position is None:
             return AtResponse(False)
@@ -78,24 +85,61 @@ class AtService(object):
             return AtResponse(False)
 
     def is_marker_in_room(self, room):
-        # Simplified logic: check if the marker is in a specific room (can be expanded)
-        if room == "room_1":  # Assume the generic object is in room_1 for now
-            return AtResponse(True)
+        """
+        Simplified logic for marker presence. Includes logic for held objects.
+        """
+        if self.is_robot_holding_object():
+            return self.is_object_with_robot_in_room(room)
         else:
-            return AtResponse(False)
+            # Default behavior: Assume the marker is in room_1 if not held
+            return AtResponse(room == "room_1")
 
     def is_bin_in_room(self, room):
+        """
+        Check if the bin is in the specified room.
+        """
         if room == "room_2":  # Simplified logic, assumes bin is always in room_2
             return AtResponse(True)
         else:
             return AtResponse(False)
 
+    def is_robot_holding_object(self):
+        """
+        Check if the robot is holding any object.
+        """
+        try:
+            # Replace with actual logic/service call to check robot's hold status
+            hold_service = rospy.ServiceProxy('/hold', Hold)
+            response = hold_service(HoldRequest(obj=""))
+            rospy.loginfo(f"Robot holding object: {response.robot_holding_obj}")
+            return response.robot_holding_obj
+        except rospy.ServiceException as e:
+            rospy.logerr(f"Error checking hold status: {e}")
+            return False
+
+    def is_object_with_robot_in_room(self, room):
+        """
+        Check if the robot is in the given room and holding an object.
+        """
+        if self.is_robot_in_room(room).obj_at_room:
+            rospy.loginfo(f"Robot is in {room} and holding the object.")
+            return AtResponse(True)
+        else:
+            rospy.loginfo(f"Robot is NOT in {room} or not holding the object.")
+            return AtResponse(False)
+
     def is_point_inside_polygon(self, point_coords, boundary_coords):
+        """
+        Check if a point is within a given polygon.
+        """
         point = Point(point_coords)
         poly = Polygon(boundary_coords)
         return point.within(poly)
 
     def get_robot_pose_orientation(self):
+        """
+        Retrieve the robot's position and orientation in the map frame.
+        """
         try:
             transform = self.tf_buffer.lookup_transform('map', 'locobot/base_link', rospy.Time())
             translation = transform.transform.translation

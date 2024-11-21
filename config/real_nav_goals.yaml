@@ -31,14 +31,14 @@ real_nav_goals:
       w: 0.993
   bin:
     position:
-      x: 0.366
-      y: -0.528
-      z: 0.004
+      x: 0.582
+      y: -1.650
+      z: 0.0011
     orientation:
-      x: -0.000
-      y: -0.005
-      z: 0.223
-      w: 0.975
+      x: 0.001
+      y: -0.002
+      z: 0.018
+      w: 1.000
   home:
     position:
       x: -0.923

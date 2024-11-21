@@ -20,6 +20,7 @@ class RealRobotFacing:
         try:
             self.param_facing_boundaries = rospy.get_param("facing_boundaries")
             self.param_nav_goals = rospy.get_param("real_nav_goals")  # For generic object boundaries
+            rospy.loginfo("Parameters successfully loaded from the parameter server.")
         except KeyError:
             rospy.logerr("Required parameters not found.")
             raise
@@ -30,6 +31,7 @@ class RealRobotFacing:
 
         # Define service
         self.facing_srv = rospy.Service('/facing', Facing, self.facing_callback)
+        rospy.loginfo("Facing service initialized.")
 
     def facing_callback(self, req):
         """
@@ -66,6 +68,7 @@ class RealRobotFacing:
         """
         Check if the robot is facing any specific object.
         """
+        rospy.loginfo("Checking if the robot is facing any specific object.")
         for obj in ["ball_1", "can_1", "bin_1", "table", "doorway_1"]:
             response = self.facing_callback(FacingRequest(obj=obj))
             if response.robot_facing_obj:
@@ -79,7 +82,10 @@ class RealRobotFacing:
         """
         robot_position, robot_orientation = self.get_robot_pose_orientation()
         if robot_position is None or robot_orientation is None:
+            rospy.logerr("Failed to retrieve robot position or orientation.")
             return FacingResponse(False)
+
+        rospy.loginfo(f"Robot position: {robot_position}, Robot yaw: {robot_orientation[2]}")
 
         boundary = self.param_facing_boundaries.get(boundary_name, {}).get("boundary")
         yaw_threshold = self.param_facing_boundaries.get(boundary_name, {}).get("threshold", 0.5)
@@ -90,7 +96,15 @@ class RealRobotFacing:
 
         yaw = robot_orientation[2]
         goal_yaw = self.get_goal_yaw(boundary_name)
-        if self.is_point_inside_polygon(robot_position, boundary) and abs(yaw - goal_yaw) <= yaw_threshold:
+
+        rospy.loginfo(f"Boundary: {boundary}, Goal yaw: {goal_yaw}, Yaw threshold: {yaw_threshold}")
+
+        point_inside = self.is_point_inside_polygon(robot_position, boundary)
+        yaw_diff = abs(yaw - goal_yaw)
+
+        rospy.loginfo(f"Point inside boundary: {point_inside}, Yaw difference: {yaw_diff}")
+
+        if point_inside and yaw_diff <= yaw_threshold:
             rospy.loginfo(f"Robot is facing {boundary_name}.")
             return FacingResponse(True)
 
@@ -104,10 +118,13 @@ class RealRobotFacing:
         transformed_coords = self.get_transformed_coordinates()
         robot_position, _ = self.get_robot_pose_orientation()
 
+        rospy.loginfo(f"Robot position: {robot_position}, Transformed coordinates: {transformed_coords}")
+
         # Retrieve boundary for generic objects from `real_nav_goals`
         generic_object_boundary = self.get_generic_object_boundary()
 
-        # Require both boundary check and transformed coordinates
+        rospy.loginfo(f"Generic object boundary: {generic_object_boundary}")
+
         if generic_object_boundary and self.is_point_inside_polygon(robot_position, generic_object_boundary):
             if transformed_coords is not None:
                 rospy.loginfo("Robot is facing a generic object.")
@@ -133,6 +150,7 @@ class RealRobotFacing:
         """
         try:
             pose = rospy.wait_for_message("/transformed_coordinates", PoseStamped, timeout=1.0)
+            rospy.loginfo(f"Transformed coordinates: {pose.pose.position}")
             return pose.pose.position
         except rospy.ROSException:
             rospy.logwarn("No transformed coordinates available.")
@@ -162,7 +180,9 @@ class RealRobotFacing:
         """
         point = Point(point_coords)
         polygon = Polygon(boundary_coords)
-        return point.within(polygon)
+        result = point.within(polygon)
+        rospy.loginfo(f"Point {point_coords} within polygon {boundary_coords}: {result}")
+        return result
 
     def get_goal_yaw(self, boundary_name):
         """
