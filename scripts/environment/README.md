@@ -1,7 +1,7 @@
 # Environment (Architecture)
 ## Overview
 
-The `environment` directory is a critical component of the overall agent system, responsible for managing the interaction between the agent and its surroundings. This directory includes modules for generating the [action space](./action/action_space.py), observing the environment's [state](./state), computing [rewards](./reward/reward_function.py), and interfacing with [ROS services](./ROS_services) for executing actions. The environment effectively bridges the gap between high-level planning and low-level execution, enabling the agent to operate effectively in both simulated and real-world scenarios.
+The `environment` directory is a component that is responsible for managing the interaction between the agent and its surroundings. This directory includes modules for generating the [action space](./action/action_space.py), observing the environment's [state](./state), computing [rewards](./reward/reward_function.py), and interfacing with [ROS services](./ROS_services) for executing actions. The environment effectively bridges the gap between high-level planning and low-level execution, enabling the agent to perform learning and reasoning.
 
 ## Directory Structure
 
@@ -80,7 +80,7 @@ This directory contains the classes and methods responsible for state management
 - **Observation Generation:** Combines symbolic and sub-symbolic data to generate comprehensive observations for the agent.
 
 ### 4. **[action/action_space_generator.py](./action/action_space.py)**
-This module is responsible for generating the action space based on the PDDL domain and problem files. It parses the PDDL files to generate both grounded and non-grounded actions that the agent can execute.
+This module is responsible for generating the action space based on the PDDL domain and problem files. It parses the PDDL files to generate both grounded and non-grounded actions that the agent can execute. It is also responsible for generating the primitive action space such as moving actions for the learning agent.
 
 **Core Functions:**
 - **Action Generation:** Creates a list of all possible actions that can be taken in the environment.

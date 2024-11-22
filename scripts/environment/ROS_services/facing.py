@@ -32,6 +32,8 @@ class RealRobotFacing:
         # Define service
         self.facing_srv = rospy.Service('/facing', Facing, self.facing_callback)
         rospy.loginfo("Facing service initialized.")
+        rospy.loginfo("Facing service is ready.")
+
 
     def facing_callback(self, req):
         """
