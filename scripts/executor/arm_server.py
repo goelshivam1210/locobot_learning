@@ -96,7 +96,7 @@ class ArmServer:
 
         return GraspObjectResponse(success=True)
 
-    def move_arm(self, pose, flag, max_tries=2):
+    def move_arm(self, pose, flag, max_tries=5):
         self.pub_coordinates.publish(pose)
         x, y, z = pose.pose.position.x, pose.pose.position.y, pose.pose.position.z
         roll, pitch, yaw = 0.0, 0.0, math.atan2(pose.pose.position.y, pose.pose.position.x)
@@ -116,6 +116,7 @@ class ArmServer:
                 if success:
                     rospy.loginfo("Arm movement successful.")
                 else:
+                    rospy.loginfo(f"theta values = {executed[0]}")
                     rospy.logwarn("Execution failed. Retrying...")
 
                 time.sleep(0.2)

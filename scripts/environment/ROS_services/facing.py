@@ -99,11 +99,15 @@ class RealRobotFacing:
         yaw = robot_orientation[2]
         goal_yaw = self.get_goal_yaw(boundary_name)
 
-        rospy.loginfo(f"Boundary: {boundary}, Goal yaw: {goal_yaw}, Yaw threshold: {yaw_threshold}")
+        def get_angle_difference(yaw1, yaw2):
+            """ Compute the shortest difference between two angles, handling wrap-around at ±π. """
+            return abs((yaw1 - yaw2 + np.pi) % (2 * np.pi) - np.pi)
 
         point_inside = self.is_point_inside_polygon(robot_position, boundary)
-        yaw_diff = abs(yaw - goal_yaw)
+        # yaw_diff = abs(yaw - goal_yaw)
+        yaw_diff = get_angle_difference(yaw, goal_yaw)
 
+        rospy.loginfo(f"Boundary: {boundary}, Goal yaw: {goal_yaw}, Yaw threshold: {yaw_threshold}")
         rospy.loginfo(f"Point inside boundary: {point_inside}, Yaw difference: {yaw_diff}")
 
         if point_inside and yaw_diff <= yaw_threshold:
