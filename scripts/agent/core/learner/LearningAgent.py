@@ -2,58 +2,94 @@
 
 import sys
 import os
+import rospy
+import torch
+import numpy as np
 
-# Add the core and environment directories to the Python path
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'environment')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'learner')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'planner')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'environment')))
 
 from PPOLearner import PPOLearner
-# from environment.RecycleBot import RecycleBot
-# from environment.ObservationGenerator import ObservationGenerator
-# from environment.RewardFunction import RewardFunction
+from environment.RecycleBotSMDP import RecycleBotSMDP  # Our RL environment
+from environment.state.SymbolicState import SymbolicState  # Tracks world state
+from environment.reward.reward_function import RewardFunction  # Defines rewards
 
 class LearningAgent:
     def __init__(self, domain_file, problem_file):
+        """
+        Initialize the LearningAgent, setting up the environment and learning model.
+        """
         self.domain_file = domain_file
         self.problem_file = problem_file
-        
-        # Initialize environment components
-        # self.env = RecycleBot(domain_file, problem_file, failed_action=None, planner=None, sym_actions_dict=None, executor_dir=None)
-        # self.observation_generator = ObservationGenerator(domain_file, problem_file)
-        # self.reward_function = RewardFunction(domain_file, problem_file, failed_action=None)
-        
-        # Initialize the learner
-        # self.learner = PPOLearner(self.env)
+
+        # Initialize the environment with the PDDL domain and problem files
+        self.env = RecycleBotSMDP(domain_file, problem_file)
+
+        # Define symbolic state tracking
+        self.symbolic_state = SymbolicState()
+
+        # Define a reward function
+        self.reward_function = RewardFunction()
+
+        # Initialize PPO-based reinforcement learning model
+        self.learner = PPOLearner(self.env)
 
     def execute_executor(self, action_name, params):
         """
         Attempt to execute a learned policy for the given action.
         Returns True if the action succeeds, otherwise False.
         """
-        print(f"Attempting to execute executor for action: {action_name} with params: {params}")
+        rospy.loginfo(f"Executing learned policy for action: {action_name} with params: {params}")
+
         try:
-            # Assuming execute_policy returns a boolean indicating success/failure
-            success = self.learner.execute_policy(action_name, params)
-            return success
+            # Convert action and params into the correct observation format
+            observation = self.symbolic_state.get_state_representation()
+
+            # Select action using learned policy
+            action = self.learner.select_action(observation)
+
+            # Execute the action in the environment
+            next_obs, reward, done, info = self.env.step(action)
+
+            # If done and reward is positive, assume success
+            if done and reward > 0:
+                rospy.loginfo(f"Successfully executed {action_name} via learned policy.")
+                return True
+
+            rospy.logwarn(f"Execution of {action_name} failed in learned mode.")
+            return False
+
         except Exception as e:
-            print(f"Error during executor execution: {e}")
+            rospy.logerr(f"Error executing policy for {action_name}: {e}")
             return False
 
     def learn(self):
         """
-        Trigger the learning process to learn or improve the policy for the given action.
+        Trigger reinforcement learning to learn a policy for a failed action.
         Returns True if learning is successful, otherwise False.
         """
-        print("Starting learning process...")
+        rospy.loginfo("Starting RL training...")
+
+        # Reset the environment
         observation = self.env.reset()
         done = False
+
         while not done:
+            # Select an action based on the policy
             action = self.learner.select_action(observation)
-            observation, reward, done, _ = self.env.step(action)
+
+            # Execute the action in the environment
+            next_obs, reward, done, _ = self.env.step(action)
+
+            # Update the policy
             self.learner.update(observation, action, reward, done)
-        
-        return True  # Indicate learning completed successfully
+
+            # Move to the next observation
+            observation = next_obs
+
+        rospy.loginfo("Learning process completed.")
+        return True  # Indicate success
 
 if __name__ == "__main__":
     domain_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../knowledge/PDDL/recycle_bot/domain.pddl'))
