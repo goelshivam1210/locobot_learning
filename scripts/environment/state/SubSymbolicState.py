@@ -1,98 +1,85 @@
+#!/usr/bin/env python3
+
 import rospy
-import tf
-import numpy as np
-from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import PoseStamped
 import tf2_ros
-import tf2_geometry_msgs
+import numpy as np
+from locobot_learning.srv import LocalGrid, LocalGridRequest
+from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_point
 
 
 class SubSymbolicState:
+    """
+    SubSymbolicState handles low-level continuous state representation for the RecycleBot agent.
+    It retrieves:
+    - Local occupancy grid around the robot (via /local_grid service)
+    - Relative pose (x, y) of known objects w.r.t. the robot
+    """
+
     def __init__(self, local_view_size=10):
-        self.local_view_size = local_view_size
-        self.occupancy_grid = None
-        self.grid_info = None
+        """
+        Initializes the service client and TF system for relative position queries.
+        """
+        rospy.wait_for_service('/local_grid')
+        self.local_grid_client = rospy.ServiceProxy('/local_grid', LocalGrid)
 
-        self.tf_listener = tf.TransformListener()
         self.tf_buffer = tf2_ros.Buffer()
-        self.tf2_listener = tf2_ros.TransformListener(self.tf_buffer)
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        self.grid_subscriber = rospy.Subscriber(
-            "/locobot/rtabmap/grid_map", OccupancyGrid, self.occupancy_grid_callback
-        )
-
-        # Relative pose target objects
+        self.local_view_size = local_view_size
         self.target_objects = ["bin_1", "generic_object", "table", "doorway_1"]
 
-    def occupancy_grid_callback(self, data):
-        self.occupancy_grid = np.array(data.data).reshape(
-            (data.info.height, data.info.width)
-        )
-        self.grid_info = data.info
-
-    def get_robot_position(self):
+    def get_local_grid(self) -> np.ndarray:
+        """
+        Queries the /local_grid service to get a normalized (0.0 to 1.0) flattened local occupancy grid.
+        """
         try:
-            (trans, _) = self.tf_listener.lookupTransform(
-                "/map", "locobot/base_link", rospy.Time(0)
-            )
-            return trans[0], trans[1]
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            rospy.logerr("TF lookup failed for robot position.")
-            return None
+            req = LocalGridRequest(size=self.local_view_size)
+            res = self.local_grid_client(req)
+            grid_flat = np.array(res.grid.data, dtype=np.int8)
+            normalized = grid_flat.astype(np.float32) / 100.0
+            return normalized
+        except rospy.ServiceException as e:
+            rospy.logerr(f"[SubSymbolicState] /local_grid service call failed: {e}")
+            return np.zeros(self.local_view_size * self.local_view_size, dtype=np.float32)
 
-    def get_local_view(self):
-        if self.occupancy_grid is None or self.grid_info is None:
-            rospy.logwarn("Occupancy grid not ready.")
-            return np.zeros((self.local_view_size, self.local_view_size))
-
-        robot_pos = self.get_robot_position()
-        if robot_pos is None:
-            return np.zeros((self.local_view_size, self.local_view_size))
-
-        x, y = robot_pos
-        grid_x = int((x - self.grid_info.origin.position.x) / self.grid_info.resolution)
-        grid_y = int((y - self.grid_info.origin.position.y) / self.grid_info.resolution)
-
-        half = self.local_view_size // 2
-        start_x = max(grid_x - half, 0)
-        end_x = min(grid_x + half + 1, self.grid_info.width)
-        start_y = max(grid_y - half, 0)
-        end_y = min(grid_y + half + 1, self.grid_info.height)
-
-        local_view = self.occupancy_grid[start_y:end_y, start_x:end_x]
-        padded = np.zeros((self.local_view_size, self.local_view_size))
-        padded[: local_view.shape[0], : local_view.shape[1]] = local_view
-
-        return padded / 100.0  # normalize to [0,1]
-
-    def get_relative_position(self, object_frame):
+    def get_relative_pose(self, target_frame: str) -> list:
+        """
+        Returns the (x, y) relative position of the given object frame w.r.t the robot.
+        """
         try:
-            transform = self.tf_buffer.lookup_transform(
-                "locobot/base_link", object_frame, rospy.Time(0), rospy.Duration(1.0)
-            )
+            transform = self.tf_buffer.lookup_transform("locobot/base_link", target_frame, rospy.Time(0), rospy.Duration(1.0))
             trans = transform.transform.translation
             return [trans.x, trans.y]
-        except Exception as e:
-            rospy.logwarn(f"TF lookup failed for {object_frame}: {e}")
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn(f"[SubSymbolicState] TF lookup failed for {target_frame}: {e}")
             return [0.0, 0.0]
 
-    def get_relative_poses(self):
-        return [self.get_relative_position(obj) for obj in self.target_objects]
+    def get_all_relative_poses(self) -> np.ndarray:
+        """
+        Returns a flattened array of relative (x, y) positions for all target objects.
+        """
+        rel_poses = [self.get_relative_pose(obj) for obj in self.target_objects]
+        return np.array(rel_poses, dtype=np.float32).flatten()
 
-    def get_symbolic_predicates(self, at_room, holding, facing):
-        # at[room_1, room_2] = 2 dims
-        # holding[nothing, object] = 1 dim
-        # facing[generic_object, table, bin, doorway, nothing] = 5 dims
+    def get_subsymbolic_observation(self) -> np.ndarray:
+        """
+        Concatenates and returns the full subsymbolic state as a NumPy array:
+        [ flattened occupancy grid | relative poses ]
+        """
+        grid = self.get_local_grid()
+        poses = self.get_all_relative_poses()
+        return np.concatenate([grid, poses])
 
-        at_encoding = [1.0 if at_room == "room_1" else 0.0, 1.0 if at_room == "room_2" else 0.0]
-        hold_encoding = [1.0 if holding else 0.0]
-        facing_options = ["generic_object", "table", "bin", "doorway", "nothing"]
-        facing_encoding = [1.0 if facing == opt else 0.0 for opt in facing_options]
 
-        return at_encoding + hold_encoding + facing_encoding
+if __name__ == "__main__":
+    rospy.init_node("test_subsymbolic_state", anonymous=True)
+    rospy.loginfo("Testing SubSymbolicState")
 
-    def get_observation(self, at_room, holding, facing):
-        local_view = self.get_local_view().flatten()  # 1D array
-        relative_poses = np.array(self.get_relative_poses()).flatten()
-        predicates = np.array(self.get_symbolic_predicates(at_room, holding, facing))
-        return np.concatenate([local_view, relative_poses, predicates])
+    state_extractor = SubSymbolicState(local_view_size=10)
+
+    rate = rospy.Rate(1)
+    while not rospy.is_shutdown():
+        obs = state_extractor.get_subsymbolic_observation()
+        rospy.loginfo(f"Observation shape: {obs.shape}")
+        print(obs)
+        rate.sleep()
