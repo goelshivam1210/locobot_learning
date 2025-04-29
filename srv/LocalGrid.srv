@@ -1,0 +1,3 @@
+uint32 size
+---
+nav_msgs/OccupancyGrid grid

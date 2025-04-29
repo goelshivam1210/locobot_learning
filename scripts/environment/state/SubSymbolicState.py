@@ -28,6 +28,12 @@ class SubSymbolicState:
         self.local_view_size = local_view_size
         self.target_objects = ["bin_1", "generic_object", "table", "doorway_1"]
 
+        try:
+            self.real_nav_goals = rospy.get_param("real_nav_goals")
+        except rospy.ROSException as e:
+            rospy.logwarn("real_nav_goals not found on param server.")
+            self.real_nav_goals = {}
+
     def get_local_grid(self) -> np.ndarray:
         """
         Queries the /local_grid service to get a normalized (0.0 to 1.0) flattened local occupancy grid.
@@ -42,17 +48,30 @@ class SubSymbolicState:
             rospy.logerr(f"[SubSymbolicState] /local_grid service call failed: {e}")
             return np.zeros(self.local_view_size * self.local_view_size, dtype=np.float32)
 
-    def get_relative_pose(self, target_frame: str) -> list:
+    def get_relative_pose(self, target_name: str) -> list:
         """
-        Returns the (x, y) relative position of the given object frame w.r.t the robot.
+        Computes (x, y) relative position between robot and given object (from param server).
         """
-        try:
-            transform = self.tf_buffer.lookup_transform("locobot/base_link", target_frame, rospy.Time(0), rospy.Duration(1.0))
-            trans = transform.transform.translation
-            return [trans.x, trans.y]
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            rospy.logwarn(f"[SubSymbolicState] TF lookup failed for {target_frame}: {e}")
+        # Get robot position
+        robot_pos = self.get_robot_position()
+        if robot_pos is None:
+            rospy.logwarn(f"[SubSymbolicState] Robot pose not available, returning zeros.")
             return [0.0, 0.0]
+
+        # Get object absolute position from params
+        obj_coords = self.real_nav_goals.get(target_name)
+        if obj_coords is None:
+            rospy.logwarn(f"[SubSymbolicState] Object {target_name} not found in real_nav_goals, returning zeros.")
+            return [0.0, 0.0]
+
+        obj_x, obj_y = obj_coords[0], obj_coords[1]
+
+        # Relative position = object - robot
+        rel_x = obj_x - robot_pos[0]
+        rel_y = obj_y - robot_pos[1]
+
+        return [rel_x, rel_y]
+
 
     def get_all_relative_poses(self) -> np.ndarray:
         """

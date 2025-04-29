@@ -1,64 +1,86 @@
 #!/usr/bin/env python3
 
 import rospy
-from locobot_learning.srv import At, Hold, Facing
 import numpy as np
+from locobot_learning.srv import At, AtRequest, Hold, HoldRequest, Facing, FacingRequest
 
 class SymbolicState:
     def __init__(self):
         """
-        Initializes the SymbolicState module by connecting to the necessary ROS services.
+        Initializes SymbolicState by setting up ROS service proxies for AT, HOLD, and FACING.
         """
-        rospy.wait_for_service('at')
-        rospy.wait_for_service('hold')
-        rospy.wait_for_service('facing')
+        rospy.wait_for_service('/at')
+        rospy.wait_for_service('/hold')
+        rospy.wait_for_service('/facing')
 
-        self.at_srv = rospy.ServiceProxy('at', At)
-        self.hold_srv = rospy.ServiceProxy('hold', Hold)
-        self.facing_srv = rospy.ServiceProxy('facing', Facing)
+        self.at_client = rospy.ServiceProxy('/at', At)
+        self.hold_client = rospy.ServiceProxy('/hold', Hold)
+        self.facing_client = rospy.ServiceProxy('/facing', Facing)
 
-        self.facing_options = ["generic_object", "table", "bin_1", "doorway_1", "nothing"]
         self.room_options = ["room_1", "room_2"]
+        self.facing_options = ["generic_object", "table", "bin_1", "doorway_1", "nothing"]
+        # Load the nav_goals from the parameter server
+        try:
+            self.nav_goals = rospy.get_param("real_nav_goals")
+        except rospy.ROSException as e:
+            rospy.logwarn("real_nav_goals not found on param server.")
+            self.nav_goals = {}
 
     def get_symbolic_state(self):
         """
-        Queries the ROS services and returns a one-hot encoded symbolic state.
+        Queries symbolic services and returns a single concatenated observation vector.
         """
-        # Determine current room
+
+        room_encoding = self._query_robot_room()
+        holding_encoding = self._query_robot_holding()
+        facing_encoding = self._query_robot_facing()
+
+        obs_vector = np.array(room_encoding + holding_encoding + facing_encoding, dtype=np.float32)
+        return obs_vector
+
+    def _query_robot_room(self):
         room_encoding = [0.0] * len(self.room_options)
-        for i, room in enumerate(self.room_options):
+        for idx, room in enumerate(self.room_options):
             try:
-                res = self.at_srv("robot_1", room)
-                if res.obj_at_location:
-                    room_encoding[i] = 1.0
+                req = AtRequest(obj="robot_1", room=room)
+                resp = self.at_client(req)
+                if resp.obj_at_room:
+                    room_encoding[idx] = 1.0
                     break
             except rospy.ServiceException as e:
-                rospy.logerr(f"AT service failed: {e}")
+                rospy.logerr(f"Error calling /at service for robot location: {e}")
+        return room_encoding
 
-        # Holding status (True/False)
+    def _query_robot_holding(self):
         try:
-            hold_res = self.hold_srv("ball_1")
-            holding_encoding = [1.0] if hold_res.holding else [0.0]
+            req = HoldRequest(obj="ball_1")  # Assuming ball_1 is the object to check
+            resp = self.hold_client(req)
+            return [1.0] if resp.robot_holding_obj else [0.0]
         except rospy.ServiceException as e:
-            rospy.logerr(f"HOLD service failed: {e}")
-            holding_encoding = [0.0]
+            rospy.logerr(f"Error calling /hold service: {e}")
+            return [0.0]
 
-        # Facing one-hot
+    def _query_robot_facing(self):
         facing_encoding = [0.0] * len(self.facing_options)
-        for i, obj in enumerate(self.facing_options):
+        for idx, obj in enumerate(self.facing_options):
             try:
-                face_res = self.facing_srv(obj)
-                if face_res.robot_facing_obj:
-                    facing_encoding[i] = 1.0
+                req = FacingRequest(obj=obj)
+                resp = self.facing_client(req)
+                if resp.robot_facing_obj:
+                    facing_encoding[idx] = 1.0
                     break
             except rospy.ServiceException as e:
-                rospy.logerr(f"FACING service failed: {e}")
-
-        return np.array(room_encoding + holding_encoding + facing_encoding, dtype=np.float32)
+                rospy.logerr(f"Error calling /facing service: {e}")
+        return facing_encoding
 
 if __name__ == "__main__":
-    rospy.init_node("symbolic_state_tester")
-    state = SymbolicState()
-    rospy.sleep(1.0)  # allow time for services to be ready
-    symbolic_vec = state.get_symbolic_state()
-    print("Symbolic state vector:", symbolic_vec)
+    rospy.init_node('symbolic_state_tester')
+    state_module = SymbolicState()
+    rospy.sleep(1.0)  # Give time for services to stabilize
+
+    try:
+        obs_vector = state_module.get_symbolic_state()
+        print("Symbolic Observation Vector:", obs_vector)
+        print("Size of observation:", obs_vector.shape)
+    except rospy.ROSInterruptException:
+        pass

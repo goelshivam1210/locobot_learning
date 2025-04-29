@@ -1,9 +1,11 @@
+#!/usr/bin/env python3
+
 # environment/state/observation_space.py
 
 import rospy
 import numpy as np
-from .SubSymbolicState import SubSymbolicState
-from .SymbolicState import SymbolicState
+from SubSymbolicState import SubSymbolicState
+from SymbolicState import SymbolicState
 
 
 class ObservationSpace:
@@ -26,10 +28,10 @@ class ObservationSpace:
         parts = []
 
         if self.use_subsymbolic:
-            parts.append(self.subsymbolic_state.get_flattened_subsymbolic_obs())
+            parts.append(self.subsymbolic_state.get_local_grid().flatten())
 
         if self.use_symbolic:
-            parts.append(self.symbolic_state.get_symbolic_encoding())
+            parts.append(self.symbolic_state.get_symbolic_state())
 
         self.current_obs = np.concatenate(parts, axis=0).astype(np.float32)
         return self.current_obs
