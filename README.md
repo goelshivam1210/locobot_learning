@@ -10,6 +10,20 @@ This repository provides instructions for operating Locobot with ROS for various
 
 ## Running Locobot
 
+### Use terminator for debugging
+
+I have a saved configuration for terminator. You can use the following command to run it:
+```bash
+terminator -l Locobot
+```
+This will open a terminal with the configuration I have saved. You can also use the command `terminator` to open a new terminal.
+
+You use the following key-bindinngs to control the terminal:
+- **Alt/Option + A**: THis will broadcast the terminal to all the terminals.
+- **Alt/Option + O**: This will stop broadcasting.
+---------------------------------------
+
+
 ### Connecting to Locobot
 
 1. **SSH into Locobot**:  

@@ -9,14 +9,13 @@ The `environment` directory is a component that is responsible for managing the 
 ```
 .
 ├── environment
-│   ├── Environment.py
+│   ├── RecycleBotSMDP.py
 │   ├── ROS_services
 │   │   ├── __init__.py
 │   │   ├── at.py
 │   │   ├── contain.py
 │   │   ├── facing.py
-│   │   └── hold_real.py
-│   ├── RecycleBotSMDP.py
+│   │   └── LocalGridService.py
 │   ├── __init__.py
 │   ├── action
 │   │   ├── __init__.py
@@ -52,40 +51,42 @@ The `environment` directory is a component that is responsible for managing the 
 
 ## Core components
 
-### 1. **[Environment.py](./Environment.py)**
-The `Environment` class serves as the base class for managing the interaction between different modules in the environment, such as the action space, state observation, and reward generation. It interfaces with the agent and executor components, providing a unified API for interacting with the environment.
 
-**Key Responsibilities:**
-- **Module Integration:** Combines the functionality of action space generation, state observation, and reward computation.
-- **Agent Interface:** Provides methods for the agent to interact with the environment.
-- **Executor Communication:** Manages communication with the executor to perform actions.
-
-### 2. **[RecycleBotSMDP.py](./RecycleBotSMDP.py)**
-The `RecycleBotSMDP` class extends the `Environment` class, implementing a Semi-Markov Decision Process (SMDP) environment specifically for the RecycleBot. It handles the high-level operations such as step execution, state transitions, and reward assignment.
+### 1. **[RecycleBotSMDP.py](./RecycleBotSMDP.py)**
+This is the main environment class that implements a Semi-Markov Decision Process (SMDP) interface.
+It is responsible for managing the interaction between the agent and the environment, including state transitions, action execution, and reward computation.
 
 **Key Features:**
-- **SMDP Handling:** Manages extended time-step actions that involve sequences of primitive actions.
-- **State Transitions:** Handles both symbolic and sub-symbolic state transitions.
-- **Action Execution:** Executes actions and manages their outcomes, integrating with ROS services when necessary.
+
+- **SMDP Framework:** Supports temporally extended actions like symbolic `approach`, `pick`, `place`, and `pass_through_door`, which abstract over multiple primitive steps.
+- **Symbolic and Sub-Symbolic Coordination:** Integrates with both symbolic planning modules and reinforcement learning modules.
+- **Action Execution:** Delegates action execution to the `ActionSpace`, which in turn interacts with primitive ROS services or symbolic action handlers.
+- **Precondition Checking:** Symbolic actions are only executed if their symbolic preconditions are satisfied at runtime using the `PDDLPredicates` module.
+
 
 ### 3. **[state/](./state/)**
-This directory contains the classes and methods responsible for state management, including both symbolic and sub-symbolic states.
+This directory includes components to compute symbolic and sub-symbolic state representations and combine them into observations.
 
-- **[SymbolicState.py](./state/SymbolicState.py):** Manages symbolic state representations, which include high-level, discrete representations of the environment.
-- **[SubSymbolicState.py](./state/SubSymbolicState.py):** Handles sub-symbolic state representations, such as continuous sensor data and low-level environmental features.
-- **[observation_generator.py](./state/observation_space.py):** Generates observations from both symbolic and sub-symbolic states to provide a complete view of the environment.
+- **[SymbolicState.py](./state/SymbolicState.py):** Queries symbolic predicates (e.g., `at`, `hold`, `facing`) via ROS services.
+  - Encodes these into a one-hot symbolic state vector.
+- **[SubSymbolicState.py](./state/SubSymbolicState.py):**  Computes spatial features such as the local occupancy grid and relative object poses using services like `LocalGridService`.
+  - Generates continuous numerical encodings of the robot's perceptual field.
+- **[observation_space.py](./state/observation_space.py):** - Fuses symbolic and sub-symbolic features into a single observation vector for the RL policy.
+  - Defines the observation dimensionality and composition.
+
 
 **Key Responsibilities:**
 - **State Representation:** Provides both high-level and low-level representations of the environment.
 - **Observation Generation:** Combines symbolic and sub-symbolic data to generate comprehensive observations for the agent.
 
-### 4. **[action/action_space_generator.py](./action/action_space.py)**
-This module is responsible for generating the action space based on the PDDL domain and problem files. It parses the PDDL files to generate both grounded and non-grounded actions that the agent can execute. It is also responsible for generating the primitive action space such as moving actions for the learning agent.
+### 4. **[action/action_space.py](./action/action_space.py)**
+This module defines the unified action space for the RL agent, combining primitive and symbolic actions into a flat discrete space.
 
 **Core Functions:**
-- **Action Generation:** Creates a list of all possible actions that can be taken in the environment.
-- **Grounding Actions:** Generates grounded actions by combining action templates with the objects available in the environment.
-- **Integration with PDDL:** Parses PDDL files to ensure that the action space is consistent with the domain and problem definitions.
+- **Action Enumeration:** Generates both primitive (e.g., `move_forward`, `turn_left`) and grounded symbolic actions from the PDDL domain/problem.
+- **Filtering:** Excludes invalid grounded actions based on prior domain knowledge.
+- **Precondition Checking:** Rejects symbolic actions at runtime if their preconditions (checked via `PDDLPredicates`) are not met.
+- **Execution Routing:** Routes symbolic actions to `PDDLActions.execute()` and primitive actions to a ROS velocity service.
 
 ### 5. **[reward/reward_function.py](./reward/reward_function.py)**
 The `RewardFunction` class handles the computation of rewards based on the outcomes of actions. It evaluates the current state and assigns rewards to guide the agent towards achieving the goal.
@@ -101,7 +102,10 @@ This directory contains the ROS service scripts that handle interactions with th
 - **[at.py](./ROS_services/at.py):** Service to check if an object is at a specific location.
 - **[contain.py](./ROS_services/contain.py):** Service to check if an object is contained within another object (e.g., if a ball is in a bin).
 - **[facing.py](./ROS_services/facing.py):** Service to determine if the robot is facing a specific object.
-- **[hold_real.py](./ROS_services/hold_real.py):** Service to check if the robot is currently holding an object.
+- **[LocalGridService.py](./ROS_services/LocalGridService.py):** Produces occupancy grid and spatial info for sub-symbolic state.
+
+**Integration:** These services are invoked by `SymbolicState`, `PDDLPredicates`, and `PDDLActions` to compute state and execute symbolic effects reliably.
+
 
 **Core Functions:**
 - **Low-Level Interactions:** Provides the necessary services for low-level interactions between the agent and the environment.
