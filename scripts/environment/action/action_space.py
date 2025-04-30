@@ -53,7 +53,7 @@ class ActionSpace:
         """
         return self.action_list[action_id]
 
-    def execute_action(self, action_id: int, primitive_client, pddl_actions_client):
+    def execute_action(self, action_id, primitive_client, pddl_actions_client, predicate_checker=None):
         """
         Executes the action based on its type.
 
@@ -62,11 +62,21 @@ class ActionSpace:
             primitive_client: Callable client for primitive actions.
             pddl_actions_client: Instance of PDDLActions class.
         """
+    
         action = self.get_action(action_id)
-        
+
         if action["type"] == "primitive":
             primitive_client(action["name"])
+            return True
+
         elif action["type"] == "symbolic":
+            if predicate_checker is not None:
+                if not predicate_checker.check_preconditions(action["name"], action["params"]):
+                    rospy.logwarn(f"[ActionSpace] Skipping symbolic action due to failed preconditions: {action}")
+                    return False
             pddl_actions_client.execute(action["name"], action["params"])
+            return True
+
         else:
             rospy.logwarn(f"[ActionSpace] Unknown action type: {action['type']}")
+            return False
