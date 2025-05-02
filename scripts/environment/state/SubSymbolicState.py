@@ -4,7 +4,7 @@ import rospy
 import tf2_ros
 import numpy as np
 from locobot_learning.srv import LocalGrid, LocalGridRequest
-from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_point
+# from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_point
 
 
 class SubSymbolicState:

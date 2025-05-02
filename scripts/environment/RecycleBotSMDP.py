@@ -22,7 +22,7 @@ from reward_function import RewardFunction  # Custom reward function class
 class RecycleBotSMDP:
     def __init__(self, reward_function=None):
         # Initialize ROS node
-        rospy.init_node("recyclebot_action_test", anonymous=True)
+        # rospy.init_node("recyclebot_action_test", anonymous=True)
 
         # Generate grounded symbolic actions
         all_actions = self.generate_grounded_symbolic_actions()

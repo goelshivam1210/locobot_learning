@@ -25,7 +25,7 @@ def test_hybrid_agent():
     }
 
     # Create HybridAgent instance
-    agent = HybridAgent(domain_file, None, objects)
+    agent = HybridAgent(domain_file, objects)
 
     rospy.loginfo("[test_hybrid_agent] Starting agent run.")
     agent.run()

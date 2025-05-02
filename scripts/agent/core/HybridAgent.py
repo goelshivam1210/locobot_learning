@@ -5,7 +5,8 @@ import os
 import rospy
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'environment')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'environment')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'environment', 'reward')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'planner')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'learner')))
 
@@ -17,16 +18,16 @@ from Agent import Agent
 from exceptions import ActionExecutionError
 
 from learner.LearningAgent import LearningAgent
-from environment.reward.reward_function import RewardFunction
-from environment.RecycleBotSMDP import RecycleBotSMDP
+from reward_function import RewardFunction
+from RecycleBotSMDP import RecycleBotSMDP
 from learner.PPO import PPO
 
 class HybridAgent:
-    def __init__(self, domain_file, predicate_funcs, objects, max_retries=3):
+    def __init__(self, domain_file, objects, max_retries=3):
         """
         Initializes the hybrid agent with planning and learning capabilities.
         """
-        self.planner = Planner(domain_file, predicate_funcs)
+        self.planner = Planner(domain_file)
         self.actions = PDDLActions()
         self.predicates = PDDLPredicates()
         self.agent = Agent(self.planner, self.actions, self.predicates)
@@ -74,7 +75,7 @@ class HybridAgent:
         env = RecycleBotSMDP(reward_function=reward_function)
         
         # Get observation + action space sizes
-        state_dim = env.observation_space.size
+        state_dim = env.observation_space.get_observation_size()
         action_dim = env.action_space.size
 
         # Create PPO learner
@@ -104,7 +105,7 @@ class HybridAgent:
         Finds the failed operator in the current plan based on the action name and parameters.
         """
         for op in self.planner.plan:
-            if op.name == action_name and list(op.params) == list(params):
+            if op.name == action_name and list(op.parameters) == list(params):
                 return op
         return None
 
