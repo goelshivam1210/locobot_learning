@@ -8,6 +8,7 @@ import os
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'core')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'action')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'state')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'reward')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'agent', 'core')))
 
 
@@ -16,9 +17,10 @@ from locobot_learning.srv import PrimitiveBase  # ROS service definition
 from PDDLActions import PDDLActions  # Custom PDDL actions class
 from PDDLPredicates import PDDLPredicates  # Custom PDDL predicates class
 from observation_space import ObservationSpace  # Custom observation space class
+from reward_function import RewardFunction  # Custom reward function class
 
 class RecycleBotSMDP:
-    def __init__(self):
+    def __init__(self, reward_function=None):
         # Initialize ROS node
         rospy.init_node("recyclebot_action_test", anonymous=True)
 
@@ -36,6 +38,8 @@ class RecycleBotSMDP:
         self.pddl_predicates_client = PDDLPredicates()
 
         self.observation_space = ObservationSpace()
+
+        self.reward_function = reward_function if reward_function else RewardFunction(set())
 
     def primitive_client(self, action_name, value=0.2):
         """
@@ -66,9 +70,9 @@ class RecycleBotSMDP:
 
         obs = self.observation_space.get_observation()
         # reward = self.compute_reward(obs)
-        reward = 0.0
-        # done = self.check_done(obs)
-        done = False
+
+        reward, done = self.reward_function.compute_reward(obs)
+
         return obs, reward, done, {}
 
     def generate_grounded_symbolic_actions(self):

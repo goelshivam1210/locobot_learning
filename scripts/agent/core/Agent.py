@@ -3,6 +3,7 @@
 from planner.planner import Planner
 from PDDLActions import PDDLActions
 from PDDLPredicates import PDDLPredicates
+from exceptions import ActionExecutionError
 
 class Agent:
     def __init__(self, planner: Planner, actions: PDDLActions, predicates: PDDLPredicates):
@@ -25,15 +26,15 @@ class Agent:
             action_name, *params = action
 
             if not self.check_preconditions(action_name, params):
-                raise RuntimeError(f"Preconditions not met for {action_name} with params {params}")
+                raise ActionExecutionError("Preconditions failed", action_name, params)
 
             try:
                 self.execute_action(action_name, params)
             except Exception as e:
-                raise RuntimeError(f"Failed to execute action {action_name} with params {params}: {e}")
+                raise ActionExecutionError(f"Execution failed: {e}", action_name, params)
 
             if not self.check_effects(action_name, params):
-                raise RuntimeError(f"Effects not met after {action_name} with params {params}")
+                raise ActionExecutionError("Effects failed", action_name, params)
 
             action = self.planner.next_action()
 

@@ -96,6 +96,7 @@ class Planner:
 
         # Post-process the plan to fix inconsistencies
         corrected_plan = self.post_process_plan(plan)
+        self.plan = corrected_plan
 
         # Convert the corrected plan to a string
         plan_str = ""
@@ -117,9 +118,6 @@ class Planner:
         print(plan_str)
 
         self.__create_action_generator(plan_str)
-
-
-
 
     def post_process_plan(self, plan):
         """
@@ -261,3 +259,24 @@ class Planner:
         for line in plan_lines:
             actions.append(line.split())
         self._action = (action for action in actions)
+
+
+    def compute_plannable_states(self, plan, failed_operator):
+        """
+        Computes the plannable state set (S_r) given a plan and a failed operator.
+        plan: list of operator objects
+        failed_operator: operator object (failed)
+        Returns: set of predicates
+        """
+        S_r = set()
+
+        for op in reversed(plan):
+            if op.name == failed_operator.name and op.parameters == failed_operator.parameters:
+                continue  # skip failed operator itself
+            if not op.add_effects.issuperset(failed_operator.positive_preconditions):
+                S_r.update(op.positive_preconditions)
+                for eff in op.add_effects:
+                    if eff in S_r:
+                        S_r.remove(eff)
+        S_r.update(failed_operator.positive_preconditions)
+        return S_r
