@@ -1,17 +1,30 @@
 # learner/LearningAgent.py
 
+from typing import Union
 import rospy
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'environment')))
+from RecycleBotSMDP import RecycleBotSMDP  # Import the RecycleBotSMDP environment
+from .PPO import PPO  # Import the PPO learner model
+
 
 class LearningAgent:
-    def __init__(self, env, learner_model):
+    def __init__(
+        self,
+        env: RecycleBotSMDP,
+        learner_model: PPO,
+        max_steps: int
+    ):
         """
         env: instance of RecycleBotSMDP
         learner_model: instance of PPO
         """
         self.env = env
-        self.learner = learner_model
+        self.learner: PPO = learner_model
+        self.max_steps = max_steps
 
-    def learn(self, max_steps=5000):
+    def learn(self, demonstration=False):
         """
         Run PPO learning loop until recovery is achieved (done=True) or max_steps reached.
         """
@@ -21,8 +34,16 @@ class LearningAgent:
         done = False
         step_count = 0
 
-        while not done and step_count < max_steps and not rospy.is_shutdown():
-            action = self.learner.select_action(obs)
+        action_dict = {action_id: f"{action['name']}({action['params'] if action['params'] else ''})" for action_id, action in enumerate(self.env.action_space.action_list)}
+
+        while not done and step_count < self.max_steps and not rospy.is_shutdown():
+            rospy.loginfo(f"[LearningAgent] Actions: {action_dict}")
+            if demonstration:
+                action = self.get_demonstration_action()
+                self.learner.update_buffer(obs, action)
+            else:
+                action, action_logprob = self.learner.select_action(obs)
+                self.learner.update_buffer(obs, action, action_logprob)
             next_obs, reward, done, info = self.env.step(action)
 
             self.learner.buffer.rewards.append(reward)
@@ -43,8 +64,45 @@ class LearningAgent:
         rospy.loginfo(f"[LearningAgent] PPO update complete: avg_loss={avg_loss:.4f}, avg_adv={avg_advantage:.4f}")
 
         if done:
-            rospy.loginfo("[LearningAgent] Plannable state achieved → recovery complete.")
+            rospy.loginfo(f"[LearningAgent] Plannable state achieved in {step_count} steps → recovery complete.")
             return True
         else:
             rospy.logwarn("[LearningAgent] Max steps reached or aborted → recovery failed.")
             return False
+    
+    # Prompts the user for a primitive action in a human demonstration..
+    def get_demonstration_action(self) -> Union[int, None]:
+        valid_actions = {"move_forward", "turn_left", "turn_right", "l", "r", "f"}
+        action_map = {
+            "f": "move_forward",
+            "l": "turn_left",
+            "r": "turn_right",
+        }
+    
+        while True:
+            action_name = input("Enter an action (move_forward, turn_left, turn_right): ").strip().lower()
+            if action_name in action_map:
+                action_name = action_map[action_name]
+            if action_name in valid_actions:
+                action_id = self.env.action_space.get_action_id(action_name)
+                if action_id is None:
+                    print(f"Action '{action_name}' not found.")
+                    continue
+                print(f"Chose action: {action_name}")
+                return action_id
+            else:
+                print("Invalid input. Please enter one of: move_forward, turn_left, turn_right.")
+
+    def save_policy(self, filename):
+        """
+        Save the current policy to a file.
+        """
+        self.learner.save(filename)
+        rospy.loginfo(f"[LearningAgent] Policy saved to {filename}")
+        
+    def load_policy(self, filename):
+        """
+        Load a policy from a file.
+        """
+        self.learner.load(filename)
+        rospy.loginfo(f"[LearningAgent] Policy loaded from {filename}")

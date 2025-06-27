@@ -9,14 +9,14 @@ from SymbolicState import SymbolicState
 
 
 class ObservationSpace:
-    def __init__(self, use_symbolic=True, use_subsymbolic=True):
+    def __init__(self, use_symbolic=True, use_subsymbolic=True, include_local_view=True, local_view_size=None):
         """
         Combines symbolic and subsymbolic states into a unified observation space.
         """
         self.use_symbolic = use_symbolic
         self.use_subsymbolic = use_subsymbolic
 
-        self.subsymbolic_state = SubSymbolicState() if use_subsymbolic else None
+        self.subsymbolic_state = SubSymbolicState(include_grid=include_local_view, local_view_size=local_view_size) if use_subsymbolic else None
         self.symbolic_state = SymbolicState() if use_symbolic else None
 
         self.current_obs = None
@@ -28,7 +28,8 @@ class ObservationSpace:
         parts = []
 
         if self.use_subsymbolic:
-            parts.append(self.subsymbolic_state.get_local_grid().flatten())
+            local_grid, _ = self.subsymbolic_state.get_local_grid()
+            parts.append(local_grid.flatten())
 
         if self.use_symbolic:
             parts.append(self.symbolic_state.get_symbolic_state())
@@ -47,7 +48,7 @@ class ObservationSpace:
         """
         Reset if needed. Placeholder for future extensions.
         """
-        rospy.loginfo("ObservationSpace reset.")
+        rospy.loginfo("[ObservationSpace] ObservationSpace reset.")
         self.current_obs = None
 
 

@@ -45,6 +45,24 @@ class Agent:
         Fetch the current state of the world dynamically using PDDLPredicates.
         """
         # Retrieve dynamic state information from predicates
+
+        #DEBUG
+        #TODO: Remove debug block
+        #We are pretending that the robot is holding "ball_1", so ball_1 needs to be in whatever
+        #room the robot is in. This is a temporary hack to get the robot to skip picking up the
+        #object and skip straight to passing through the doorway.
+        robot_location = self.predicates.get_robot_location()
+        current_state = {
+            'robot_location': robot_location,
+            'robot_facing': self.predicates.get_robot_facing(),
+            'robot_holding': self.predicates.get_robot_holding(),
+            'object_locations': {
+                obj: robot_location if obj == 'ball_1' else self.predicates.get_object_location(obj) 
+                    for obj in objects.get('ball', []) + objects.get('bin', [])
+            }
+        }
+        return current_state
+        #END DEBUG
         current_state = {
             'robot_location': self.predicates.get_robot_location(),
             'robot_facing': self.predicates.get_robot_facing(),

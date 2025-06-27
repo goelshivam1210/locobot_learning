@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   std_srvs
   message_generation
+  nav_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -59,21 +60,22 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
-  GraspPose.srv
+  # GraspPose.srv
   Approach.srv
   Grasp.srv
   Place.srv
-  GazeboObservation.srv
+  # GazeboObservation.srv
   At.srv
   Contain.srv
   Facing.srv
   Hold.srv
   PrimitiveBase.srv
-  AlignRobot.srv
+  # AlignRobot.srv
   GraspObject.srv
   DropObject.srv
   DropObjectAside.srv
-
+  LocalGrid.srv
+  MergedOccupancyGrid.srv
 )
 
 ## Generate actions in the 'action' folder
@@ -89,6 +91,7 @@ generate_messages(
   geometry_msgs 
   std_msgs
   std_srvs
+  nav_msgs
 )
 
 ################################################
@@ -184,15 +187,15 @@ include_directories(
 #   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 # )
 catkin_install_python(PROGRAMS 
-  scripts/executor/grasp_pose_server.py
-  scripts/executor/approach_server.py scripts/executor/tests/test_approach.py
-  scripts/executor/grasp_server.py scripts/executor/tests/test_grasp.py
-  scripts/executor/universal_move_arm.py
-  scripts/executor/place_server.py scripts/executor/tests/test_place.py
-  scripts/executor/primitive_move_base_server.py scripts/executor/tests/test_primitive.py
-  scripts/environment/observation_server_gazebo.py scripts/environment/tests/test_observation_gazebo_client.py
-  scripts/environment/predicate_services/at.py scripts/environment/predicate_services/contain.py
-  scripts/environment/predicate_services/facing.py
+  # scripts/executor/grasp_pose_server.py
+  # scripts/executor/approach_server.py scripts/executor/tests/test_approach.py
+  # scripts/executor/grasp_server.py scripts/executor/tests/test_grasp.py
+  # scripts/executor/universal_move_arm.py
+  # scripts/executor/place_server.py scripts/executor/tests/test_place.py
+  # scripts/executor/primitive_move_base_server.py scripts/executor/tests/test_primitive.py
+  # scripts/environment/observation_server_gazebo.py scripts/environment/tests/test_observation_gazebo_client.py
+  # scripts/environment/predicate_services/at.py scripts/environment/predicate_services/contain.py
+  # scripts/environment/predicate_services/facing.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

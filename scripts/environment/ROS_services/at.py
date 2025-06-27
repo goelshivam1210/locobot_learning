@@ -14,14 +14,14 @@ class AtService:
         try:
             self.param_at_boundaries = rospy.get_param("at_boundaries")
         except (KeyError, rospy.ROSException):
-            rospy.logerr("Error getting 'at_boundaries' parameter. Shutting down node.")
+            rospy.logerr("[AtService] Error getting 'at_boundaries' parameter. Shutting down node.")
             rospy.signal_shutdown("Parameter error")
             return
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        rospy.loginfo("At service is ready.")
+        rospy.loginfo("[AtService] At service is ready.")
         rospy.spin()
 
     def at_callback(self, req):
@@ -30,14 +30,14 @@ class AtService:
         """
         room = req.room
         obj = req.obj
-        rospy.loginfo(f"Received request to check if {obj} is in {room}.")
+        rospy.loginfo(f"[AtService] Received request to check if {obj} is in {room}.")
 
         # Map objects like ball_1 or can_1 to 'generic_object'
         obj = self.map_to_generic_object(obj)
 
         # Special case: Always true if checking doorway_1 between room_1 and room_2
         if obj == "doorway_1" and (room == "room_1" or room == "room_2"):
-            rospy.loginfo(f"{obj} is permanently connected to {room}.")
+            rospy.loginfo(f"[AtService] {obj} is permanently connected to {room}.")
             return AtResponse(True)
 
         # If the robot is holding the object, check the robot's location
@@ -51,7 +51,7 @@ class AtService:
         elif obj == "bin_1":
             return self.is_bin_in_room(room)
         else:
-            rospy.logwarn(f"Object {obj} is not recognized.")
+            rospy.logwarn(f"[AtService] Object {obj} is not recognized.")
             return AtResponse(False)
 
     def map_to_generic_object(self, obj: str) -> str:
@@ -74,14 +74,14 @@ class AtService:
         boundary = self.param_at_boundaries.get(room)
 
         if boundary is None:
-            rospy.logwarn(f"Room {room} boundary is not defined.")
+            rospy.logwarn(f"[AtService] Room {room} boundary is not defined.")
             return AtResponse(False)
 
         if self.is_point_inside_polygon(point, boundary):
-            rospy.loginfo(f"Robot is in {room}.")
+            rospy.loginfo(f"[AtService] Robot is in {room}.")
             return AtResponse(True)
         else:
-            rospy.loginfo(f"Robot is NOT in {room}.")
+            rospy.loginfo(f"[AtService] Robot is NOT in {room}.")
             return AtResponse(False)
 
     def is_marker_in_room(self, room):
@@ -111,10 +111,10 @@ class AtService:
             # Replace with actual logic/service call to check robot's hold status
             hold_service = rospy.ServiceProxy('/hold', Hold)
             response = hold_service(HoldRequest(obj=""))
-            rospy.loginfo(f"Robot holding object: {response.robot_holding_obj}")
+            rospy.loginfo(f"[AtService] Robot holding object: {response.robot_holding_obj}")
             return response.robot_holding_obj
         except rospy.ServiceException as e:
-            rospy.logerr(f"Error checking hold status: {e}")
+            rospy.logerr(f"[AtService] Error checking hold status: {e}")
             return False
 
     def is_object_with_robot_in_room(self, room):
@@ -122,10 +122,10 @@ class AtService:
         Check if the robot is in the given room and holding an object.
         """
         if self.is_robot_in_room(room).obj_at_room:
-            rospy.loginfo(f"Robot is in {room} and holding the object.")
+            rospy.loginfo(f"[AtService] Robot is in {room} and holding the object.")
             return AtResponse(True)
         else:
-            rospy.loginfo(f"Robot is NOT in {room} or not holding the object.")
+            rospy.loginfo(f"[AtService] Robot is NOT in {room} or not holding the object.")
             return AtResponse(False)
 
     def is_point_inside_polygon(self, point_coords, boundary_coords):
@@ -146,7 +146,7 @@ class AtService:
             rotation = transform.transform.rotation
             return np.array([translation.x, translation.y, translation.z]), [rotation.x, rotation.y, rotation.z, rotation.w]
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            rospy.logerr(f"Error getting robot pose: {e}")
+            rospy.logerr(f"[AtService] Error getting robot pose: {e}")
             return None, None
 
 

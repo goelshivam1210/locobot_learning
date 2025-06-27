@@ -35,7 +35,7 @@ class PDDLActions:
         rospy.loginfo(f"Approaching {obj} in {room} while facing {facing}.")
         try:
             # Map object to the correct format expected by the service
-            target = self.map_to_generic_object(obj)
+            target = PDDLActions.map_to_generic_object(obj)
             rospy.loginfo(f"Mapped object: {obj} -> Target: {target}")
 
             # Call the approach service with the mapped target
@@ -47,7 +47,8 @@ class PDDLActions:
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
 
-    def map_to_generic_object(self, obj: str) -> str:
+    @staticmethod
+    def map_to_generic_object(obj: str) -> str:
         """
         Map specific objects like ball_1 or can_1 to 'generic_object' for ROS service calls.
         """
@@ -65,7 +66,7 @@ class PDDLActions:
         """
         rospy.loginfo(f"Picking up {obj} in {room}.")
         try:
-            obj = self.map_to_generic_object(obj)  # Convert to generic object
+            obj = PDDLActions.map_to_generic_object(obj)  # Convert to generic object
             response = self.grasp_service(obj)
             if response.success:
                 rospy.loginfo(f"Successfully picked up {obj}. Robot is now holding the object.")
@@ -82,7 +83,7 @@ class PDDLActions:
         """
         rospy.loginfo(f"Placing {obj} in {container} in {room}.")
         try:
-            obj = self.map_to_generic_object(obj)  # Convert to generic object
+            obj = PDDLActions.map_to_generic_object(obj)  # Convert to generic object
             response = self.drop_service()
             if response.success:
                 rospy.loginfo(f"Successfully placed {obj}.")

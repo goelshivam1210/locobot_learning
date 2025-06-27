@@ -51,7 +51,9 @@ class RealRobotFacing:
             return FacingResponse(False)
 
         # Handle specific objects
-        if obj in ["ball_1", "can_1"]:  # Generic objects
+        # 2025-05-05: Added "generic_object" to the list of objects because SymbolicState.py
+        # is checking for "generic_object" in the facing service.
+        if obj in ["ball_1", "can_1", "generic_object"]:  # Generic objects
             return self.check_facing_generic_object()
 
         if obj == "bin_1":  # Bin

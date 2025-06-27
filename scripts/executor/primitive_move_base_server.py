@@ -18,7 +18,7 @@ class PrimitiveBaseServer:
         elif mode == "kobuki_base":
             cmd_vel_topic = "/mobile_base/commands/velocity"
         else:
-            rospy.logerr(f"Invalid mode '{mode}'. Exiting.")
+            rospy.logerr(f"[PrimitiveBaseServer] Invalid mode '{mode}'. Exiting.")
             sys.exit(1)
 
         self.cmd_vel_pub = rospy.Publisher(cmd_vel_topic, Twist, queue_size=10)

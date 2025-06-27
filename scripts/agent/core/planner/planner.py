@@ -1,8 +1,17 @@
 import re
+import sys
+import os
 from os import mkdir
 from os.path import exists, join
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'knowledge', 'pddl-parser')))
+
 from pddl_parser.PDDL import PDDL_Parser
 from pddl_parser.planner import Planner as PDDL_Planner
+from pddl_parser.action import Action as PDDL_Action
+
+#Reexport the PDDL_Action class
+Action = PDDL_Action
 
 class Planner:
     def __init__(self, domain_path: str):
@@ -92,7 +101,7 @@ class Planner:
         print(f"Plan from PDDLParser = {plan}")
 
         if plan is None:
-            return "No plan found"
+            raise Exception("No plan found")
 
         # Post-process the plan to fix inconsistencies
         corrected_plan = self.post_process_plan(plan)
@@ -269,14 +278,49 @@ class Planner:
         Returns: set of predicates
         """
         S_r = set()
-
+        
         for op in reversed(plan):
-            if op.name == failed_operator.name and op.parameters == failed_operator.parameters:
+            print("[ComputePlannableStates] Processing operator", op)
+            if op.name == failed_operator.name and op.parameters == failed_operator.parameters or \
+                failed_operator.add_effects.issuperset(op.positive_preconditions):
+                print(f"[ComputePlannableStates] Skipping failed operator")
                 continue  # skip failed operator itself
-            if not op.add_effects.issuperset(failed_operator.positive_preconditions):
-                S_r.update(op.positive_preconditions)
-                for eff in op.add_effects:
-                    if eff in S_r:
-                        S_r.remove(eff)
-        S_r.update(failed_operator.positive_preconditions)
+            print(f"[ComputePlannableStates] Adding positive preconditions {op.positive_preconditions}")
+            S_r.update(op.positive_preconditions)
+            print(f"[ComputePlannableStates] Updated set: {S_r}")
+            for eff in op.add_effects:
+                print(f"[ComputePlannableStates] Processing add effect: {eff}")
+                if eff in S_r:
+                    print(f"[ComputePlannableStates] Removing effect: {eff}")
+                    S_r.remove(eff)
+                    print(f"[ComputePlannableStates] Updated set: {S_r}")
+        S_r.update(failed_operator.add_effects)
         return S_r
+
+if __name__ == "__main__":
+    from argparse import ArgumentParser
+    import os
+
+    # parser = ArgumentParser()
+    # parser.add_argument("-a", "--action")
+    # parser.add_argument("-p", "--param", nargs="*")
+
+    # args = parser.parse_args()
+
+    # action = args.action
+    # params = args.param
+
+    action, *params = sys.argv[1:]
+
+    print(f"Action: {action}")
+    print(f"Params: {params}")
+
+
+    domain_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'knowledge', 'PDDL', 'recycle_bot', 'domain.pddl'))
+    planner = Planner(domain_path=domain_path)
+
+    result = planner.verify_preconditions(action, *params)
+
+    print(f"Verification result: {result}")
+
+
