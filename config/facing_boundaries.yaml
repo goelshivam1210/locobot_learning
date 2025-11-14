@@ -7,11 +7,11 @@ facing_boundaries:
     threshold: 1.7  # Threshold for yaw tolerance when facing the door
 
   bin:
-    boundary: [[-0.23182952404022217,-1.5564528703689575],
-              [-0.6146436929702759, -1.5543627738952637],
-              [-0.500320315361023,-1.1972458362579346],
-              [-0.19498135149478912,-1.3456125259399414]]
-    threshold: 1.8  # Threshold for yaw tolerance when facing the bin
+    boundary: [[-0.946617, -1.166030],
+               [-1.419750, -1.004335],
+               [-1.621609, -1.594990],
+               [-1.148476, -1.756686]]
+    threshold: 1.9  # Threshold for yaw tolerance when facing the bin
 
   table:
     boundary: [[-0.8234601020812988, -1.3558356761932373], 
