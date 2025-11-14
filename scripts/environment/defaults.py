@@ -9,7 +9,7 @@ DEFAULT_LOCAL_VIEW_SIZE = 8
 DEFAULT_LOCAL_VIEW_RESOLUTION = 0.1
 
 # Default velocity for turning primitive actions
-DEFAULT_ANGULAR_VELOCITY = 0.2
+DEFAULT_ANGULAR_VELOCITY = 0.35
 
 # Defauly velocity for linear primitive actions
 DEFAULT_LINEAR_VELOCITY = 0.5

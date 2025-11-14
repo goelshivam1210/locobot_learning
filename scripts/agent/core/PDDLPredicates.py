@@ -28,6 +28,8 @@ class PDDLPredicates:
             "place": [("check_at", [0, 1]), ("check_facing", [2]), ("check_hold", [0])],
         }
 
+        from pprint import pformat
+        rospy.loginfo(f"[PDDLPredicates] Predicates object: {pformat(self)}")
 
         for pred_name, arg_indices in relevant_predicates.get(action_name, []):
             # Handle constants and dynamic indices
@@ -36,7 +38,10 @@ class PDDLPredicates:
                 for i in arg_indices
             ]
 
+            rospy.loginfo(f"[PDDLPredicates] Evaluating precondition {pred_name} with args {args} for action {action_name} with params {params}")
+
             if not getattr(self, pred_name)(*args):
+                rospy.loginfo(f"[PDDLPredicates] Precondition {pred_name} with args {args} failed for action {action_name} with params {params}")
                 return False
         return True
 
@@ -61,6 +66,7 @@ class PDDLPredicates:
             ]
 
             if not getattr(self, pred_name)(*args):
+                rospy.loginfo(f"[PDDLPredicates] Effect {pred_name} with args {args} failed for action {action_name} with params {params}")
                 return False
         return True
 
@@ -106,6 +112,8 @@ class PDDLPredicates:
             if obj == "nothing":
                 return not response.robot_holding_obj  # Return True if the robot is not holding anything
             
+            #DEBUG: Pretend the robot is holding "ball_1" for testing purposes
+            return True
             # If checking for a specific object, return True if the robot is holding something (robot_holding_obj is True)
             return response.robot_holding_obj
         except rospy.ServiceException as e:

@@ -25,20 +25,25 @@ class Agent:
         while action is not None:
             action_name, *params = action
 
-            if not self.check_preconditions(action_name, params):
-                raise ActionExecutionError("Preconditions failed", action_name, params)
-
-            try:
-                self.execute_action(action_name, params)
-            except Exception as e:
-                raise ActionExecutionError(f"Execution failed: {e}", action_name, params)
-
-            if not self.check_effects(action_name, params):
-                raise ActionExecutionError("Effects failed", action_name, params)
+            self.run_action(action_name, list(params))
 
             action = self.planner.next_action()
 
         print("Plan completed successfully.")
+
+    def run_action(self, action_name: str, params: list):
+        import rospy
+        rospy.loginfo(f"[Agent] Executing action: {action_name} with params: {params}")
+        if not self.check_preconditions(action_name, params):
+            raise ActionExecutionError("Preconditions failed", action_name, params)
+
+        try:
+            self.execute_action(action_name, params)
+        except Exception as e:
+            raise ActionExecutionError(f"Execution failed: {e}", action_name, params)
+
+        if not self.check_effects(action_name, params):
+            raise ActionExecutionError("Effects failed", action_name, params)
 
     def fetch_current_state(self, objects: dict) -> dict:
         """

@@ -1,12 +1,13 @@
 # learner/LearningAgent.py
 
-from typing import Union
+from typing import Union, Tuple
 import rospy
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'environment')))
 from RecycleBotSMDP import RecycleBotSMDP  # Import the RecycleBotSMDP environment
 from .PPO import PPO  # Import the PPO learner model
+from .learning_stats import LearningStats  # Import LearningStats for logging
 
 
 class LearningAgent:
@@ -24,7 +25,7 @@ class LearningAgent:
         self.learner: PPO = learner_model
         self.max_steps = max_steps
 
-    def learn(self, demonstration=False):
+    def learn(self, stats: LearningStats, episode: int, demonstration=False) -> bool:
         """
         Run PPO learning loop until recovery is achieved (done=True) or max_steps reached.
         """
@@ -38,6 +39,7 @@ class LearningAgent:
 
         while not done and step_count < self.max_steps and not rospy.is_shutdown():
             rospy.loginfo(f"[LearningAgent] Actions: {action_dict}")
+            step_start = rospy.get_time()
             if demonstration:
                 action = self.get_demonstration_action()
                 self.learner.update_buffer(obs, action)
@@ -45,7 +47,8 @@ class LearningAgent:
                 action, action_logprob = self.learner.select_action(obs)
                 self.learner.update_buffer(obs, action, action_logprob)
             next_obs, reward, done, info = self.env.step(action)
-
+            step_end = rospy.get_time()
+            stats.log_step(episode, step_count, reward, duration=step_end - step_start)
             self.learner.buffer.rewards.append(reward)
             self.learner.buffer.is_terminals.append(done)
 

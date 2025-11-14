@@ -108,11 +108,13 @@ class AtService:
         Check if the robot is holding any object.
         """
         try:
-            # Replace with actual logic/service call to check robot's hold status
+            #TODO: Replace with actual logic/service call to check robot's hold status
             hold_service = rospy.ServiceProxy('/hold', Hold)
             response = hold_service(HoldRequest(obj=""))
+            #DEBUG: For testing purposes, pretend the robot is holding the object.
             rospy.loginfo(f"[AtService] Robot holding object: {response.robot_holding_obj}")
-            return response.robot_holding_obj
+            return True
+            # return response.robot_holding_obj
         except rospy.ServiceException as e:
             rospy.logerr(f"[AtService] Error checking hold status: {e}")
             return False

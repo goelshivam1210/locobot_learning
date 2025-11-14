@@ -16,7 +16,7 @@ from PDDLActions import PDDLActions
 
 
 class RewardFunction:
-    def __init__(self, plannable_state: Set, failed_operator: Action):
+    def __init__(self, plannable_state: Set, failed_operator: Action, use_sparse: bool = False):
         """
         plannable_state: set of predicates that defines recovery state
         """
