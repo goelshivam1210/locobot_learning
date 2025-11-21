@@ -39,7 +39,6 @@ def test_hybrid_agent(include_local_view=True, num_demonstrations: int = 0, test
         include_local_view=include_local_view,
         num_episodes=50,
         max_steps=50,
-        # max_steps=25 if test_only else 50,
         include_symbolic_actions=False,
         stats_file_path=stats_file
     )

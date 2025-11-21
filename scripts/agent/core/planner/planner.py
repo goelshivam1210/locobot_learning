@@ -103,6 +103,7 @@ class Planner:
         if plan is None:
             raise Exception("No plan found")
 
+        # Skipping plan correction because it messes up the facing parameters
         # Post-process the plan to fix inconsistencies
         # corrected_plan = self.post_process_plan(plan)
         # self.plan = corrected_plan

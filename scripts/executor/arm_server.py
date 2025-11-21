@@ -80,8 +80,6 @@ class ArmServer:
         pose.pose.position = Point(x, y, z)
         pose.pose.orientation = Quaternion(0.0, 0.0, 0.0, 1.0)
 
-        rospy.loginfo(f"[ArmServer] Grasping object at: x={x}, y={y}, z={z} with flag={flag}")
-
         rospy.loginfo("Opening gripper")
         self.bot.gripper.open()
         time.sleep(0.2)

@@ -28,8 +28,6 @@ class PDDLPredicates:
             "place": [("check_at", [0, 1]), ("check_facing", [2]), ("check_hold", [0])],
         }
 
-        from pprint import pformat
-        rospy.loginfo(f"[PDDLPredicates] Predicates object: {pformat(self)}")
 
         for pred_name, arg_indices in relevant_predicates.get(action_name, []):
             # Handle constants and dynamic indices
