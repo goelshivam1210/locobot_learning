@@ -75,7 +75,6 @@ add_service_files(
   DropObject.srv
   DropObjectAside.srv
   LocalGrid.srv
-  MergedOccupancyGrid.srv
 )
 
 ## Generate actions in the 'action' folder

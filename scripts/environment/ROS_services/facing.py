@@ -7,7 +7,13 @@ import tf2_ros
 import numpy as np
 from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Float32
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from bin_visibility_checker import BinVisibilityChecker
 
+BIN_OBSTRUCTION_THRESHOLD = 0.5  # If bin visibility is below this threshold, consider it obstructed
 
 class RealRobotFacing:
     def __init__(self):
@@ -31,6 +37,7 @@ class RealRobotFacing:
 
         # Define service
         self.facing_srv = rospy.Service('/facing', Facing, self.facing_callback)
+        self.bin_visibility_checker = BinVisibilityChecker(debug=True)
         rospy.loginfo("Facing service initialized.")
         rospy.loginfo("Facing service is ready.")
 
@@ -57,7 +64,7 @@ class RealRobotFacing:
             return self.check_facing_generic_object()
 
         if obj == "bin_1":  # Bin
-            return self.check_facing_boundary("bin")
+            return self.check_facing_bin()
 
         if obj == "table":  # Table
             return self.check_facing_boundary("table")
@@ -140,6 +147,27 @@ class RealRobotFacing:
 
         rospy.loginfo("Robot is NOT facing a generic object.")
         return FacingResponse(False)
+
+    def check_facing_bin(self):
+        """
+        Check if the robot is facing the bin using its boundary.
+        """
+        is_in_facing_position = self.check_facing_boundary("bin")
+
+        if not is_in_facing_position.robot_facing_obj:
+            rospy.loginfo("Robot is NOT facing the bin.")
+            return FacingResponse(False)
+
+        # The robot is in the correct position and yaw to be facing the bin; now check if there are obstructions
+        # between it and the bin
+        bin_visibility = self.bin_visibility_checker.get_visibility()
+        if bin_visibility < BIN_OBSTRUCTION_THRESHOLD:
+            rospy.loginfo(f"Robot is facing the bin, but it is obstructed (bin visibility: {(bin_visibility * 100):.2f}%).")
+            return FacingResponse(False)
+        
+        rospy.loginfo("Robot is facing the bin without obstructions.")
+        return FacingResponse(True)
+
 
     def get_generic_object_boundary(self):
         """

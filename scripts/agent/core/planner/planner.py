@@ -103,13 +103,16 @@ class Planner:
         if plan is None:
             raise Exception("No plan found")
 
+        # Skipping plan correction because it messes up the facing parameters
         # Post-process the plan to fix inconsistencies
-        corrected_plan = self.post_process_plan(plan)
-        self.plan = corrected_plan
+        # corrected_plan = self.post_process_plan(plan)
+        # self.plan = corrected_plan
+        self.plan = plan
 
         # Convert the corrected plan to a string
         plan_str = ""
-        for act in corrected_plan:
+        # for act in corrected_plan:
+        for act in plan:
             plan_str += f"{act.name} {' '.join(act.parameters)}\n"
 
         return plan_str
@@ -281,20 +284,24 @@ class Planner:
         
         for op in reversed(plan):
             print("[ComputePlannableStates] Processing operator", op)
-            if op.name == failed_operator.name and op.parameters == failed_operator.parameters or \
-                failed_operator.add_effects.issuperset(op.positive_preconditions):
-                print(f"[ComputePlannableStates] Skipping failed operator")
-                continue  # skip failed operator itself
+            if op.name == failed_operator.name and op.parameters == failed_operator.parameters:
+                print(f"[ComputePlannableStates] Reached failed operator: exiting loop")
+                break
+            
+            if failed_operator.add_effects.issuperset(op.positive_preconditions):
+                continue
             print(f"[ComputePlannableStates] Adding positive preconditions {op.positive_preconditions}")
             S_r.update(op.positive_preconditions)
-            print(f"[ComputePlannableStates] Updated set: {S_r}")
+            print(f"[ComputePlannableStates] Updated set after addition: {S_r}")
             for eff in op.add_effects:
                 print(f"[ComputePlannableStates] Processing add effect: {eff}")
                 if eff in S_r:
                     print(f"[ComputePlannableStates] Removing effect: {eff}")
                     S_r.remove(eff)
-                    print(f"[ComputePlannableStates] Updated set: {S_r}")
+                    print(f"[ComputePlannableStates] Updated set after removal: {S_r}")
         S_r.update(failed_operator.add_effects)
+        print(f"[ComputePlannableStates] Updated set after failed op effects added: {S_r}")
+
         return S_r
 
 if __name__ == "__main__":

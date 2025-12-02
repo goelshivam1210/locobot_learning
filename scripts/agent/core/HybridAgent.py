@@ -4,6 +4,7 @@ from typing import Union
 import sys
 import os
 import rospy
+from io import TextIOBase
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'environment')))
@@ -15,6 +16,7 @@ from planner.planner import Planner
 from PDDLActions import PDDLActions
 from PDDLPredicates import PDDLPredicates
 from learner.LearningAgent import LearningAgent
+from learner.learning_stats import LearningStats
 from Agent import Agent
 from exceptions import ActionExecutionError
 
@@ -26,8 +28,8 @@ from learner.PPO import PPO
 POLICY_DIRECTORY = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'policy'))
 INCOMPLETE_POLICY_DIRECTORY = os.path.join(POLICY_DIRECTORY, "incomplete")
 
-DEFAULT_MAX_STEPS = 50
-DEFAULT_NUM_EPISODES = 20
+DEFAULT_MAX_STEPS = 25
+DEFAULT_NUM_EPISODES = 30
 
 
 class HybridAgent:
@@ -40,6 +42,8 @@ class HybridAgent:
         include_local_view=True,
         max_steps: int = DEFAULT_MAX_STEPS,
         num_episodes: int = DEFAULT_NUM_EPISODES,
+        include_symbolic_actions=False,
+        stats_file_path: Union[str, None] = None,
     ):
         """
         Initializes the hybrid agent with planning and learning capabilities.
@@ -54,6 +58,8 @@ class HybridAgent:
         self.include_local_view = include_local_view
         self.max_steps = max_steps
         self.num_episodes = num_episodes
+        self.include_symbolic_actions = include_symbolic_actions
+        self.stats_file_path = stats_file_path
 
     def run(self):
         """
@@ -70,23 +76,35 @@ class HybridAgent:
         if success == True:
             rospy.loginfo("[HybridAgent] Plan executed successfully.")
 
+    def get_policy_path_for_operator(self, operator, episode: Union[int, None] = None) -> str:
+        """
+        Returns the path to the policy file for a given operator.
+        """
+        param_string = "_".join(operator.parameters) if operator.parameters else "_"
+        episode_string = f"episode_{episode}" if episode is not None else ""
+        path = os.path.join(f"{operator.name}/{param_string}{episode_string}.pth")
+        return path
 
-    def get_incomplete_policy_file(self):
+
+    def get_incomplete_policy_file(self, failed_op):
         """
         Returns the path to the incomplete policy file, if it exists.
         """
-        if not os.path.exists(INCOMPLETE_POLICY_DIRECTORY):
+        op_directory = os.path.join(INCOMPLETE_POLICY_DIRECTORY, failed_op.name)
+        if not os.path.exists(op_directory):
             return None
-        files = os.listdir(INCOMPLETE_POLICY_DIRECTORY)
+        files = os.listdir(op_directory)
         incomplete_policy_file = next((file for file in files if file.endswith('.pth')), None)
-        return incomplete_policy_file
+        if incomplete_policy_file is None:
+            return None
+        return os.path.join(op_directory, incomplete_policy_file)
 
 
-    def resume_incomplete_policy(self, model: PPO) -> int:
+    def resume_incomplete_policy(self, model: PPO, failed_op) -> int:
         """
         Resumes the learning process from a saved policy.
         """
-        incomplete_policy_file = self.get_incomplete_policy_file()
+        incomplete_policy_file = self.get_incomplete_policy_file(failed_op)
         if incomplete_policy_file is None:
             return 0
         
@@ -95,7 +113,7 @@ class HybridAgent:
             return 0
             
         import re
-        episode_number = re.match(r'^episode_(\d+)\.pth$', incomplete_policy_file)
+        episode_number = re.search(r'episode_(\d+)\.pth$', incomplete_policy_file)
         if not episode_number:
             rospy.logerr(f"[HybridAgent] {incomplete_policy_file} is an invalid incomplete policy file name format. Starting learning from beginning.")
             return 0
@@ -105,16 +123,19 @@ class HybridAgent:
         rospy.loginfo(f"[HybridAgent] Resuming learning from episode {episode_number + 1} with policy {incomplete_policy_file}")
         return episode_number + 1
         
-    def save_incomplete_policy(self, learner: LearningAgent, episode: int):
+    def save_incomplete_policy(self, learner: LearningAgent, episode: int, failed_op):
         """
         Saves the current policy as an incomplete policy.
         """
-        if not os.path.exists(INCOMPLETE_POLICY_DIRECTORY):
-            os.makedirs(INCOMPLETE_POLICY_DIRECTORY)
 
-        incomplete_policy_path = os.path.join(INCOMPLETE_POLICY_DIRECTORY, f"episode_{episode}.pth")
-        learner.save_policy(incomplete_policy_path)
-        rospy.loginfo(f"[HybridAgent] Saved incomplete policy for episode {episode} at {incomplete_policy_path}")
+        policy_path = self.get_policy_path_for_operator(failed_op, episode=episode)
+        policy_path = os.path.join(INCOMPLETE_POLICY_DIRECTORY, policy_path)
+        if not os.path.exists(INCOMPLETE_POLICY_DIRECTORY):
+            os.makedirs(os.path.dirname(policy_path))
+
+
+        learner.save_policy(policy_path)
+        rospy.loginfo(f"[HybridAgent] Saved incomplete policy for episode {episode} at {policy_path}")
 
 
     def remove_incomplete_policy(self, incomplete_policy_file: Union[str, None]):
@@ -143,48 +164,32 @@ class HybridAgent:
         except OSError as e:
             rospy.logerr(f"[HybridAgent] Failed to remove incomplete policy directory: {e}")
     
-    def run_saved_policy(self, model: PPO, env: RecycleBotSMDP) -> Union[bool, None]:
+    def run_saved_policy(self, model: PPO, env: RecycleBotSMDP, policy_path: str) -> Union[bool, None]:
         """
         Runs the saved policy for the failed operator.
         """
         
         # Load the saved policy
-        saved_policy_file = self.get_saved_policy_path()
-        if saved_policy_file is not None:
-            rospy.loginfo(f"[HybridAgent] Running saved policy at {saved_policy_file}")
-            model.load(saved_policy_file)
-            done = False
-            step = 0
-            while step < self.max_steps and not done:
-                step += 1
-                obs = env.observation_space.get_observation()
+        rospy.loginfo(f"[HybridAgent] Running saved policy at {policy_path}")
+        model.load(policy_path)
+        done = False
+        step = 0
+        while step < self.max_steps and not done:
+            step += 1
+            obs = env.observation_space.get_observation()
 
-                # action = model.select_optimal_action(obs)
-                action, action_logprob = model.select_action(obs)
-                rospy.loginfo(f"[HybridAgent] Selected action ID: {action}")
-                rospy.loginfo(f"[HybridAgent] Executing action: {env.action_space.get_action(action)}")
-                _, _, done, _ = env.step(action)
-                rospy.loginfo(f"[HybridAgent] Action log probability: {action_logprob}")
-            if done:
-                rospy.loginfo(f"[HybridAgent] Saved policy execution completed in {step} steps.")
-                return True
-            else:
-                rospy.loginfo(f"[HybridAgent] Saved policy execution failed after {step} steps")
-                return False
+            # action = model.select_optimal_action(obs)
+            action, action_logprob = model.select_action(obs)
+            rospy.loginfo(f"[HybridAgent] Selected action ID: {action}")
+            rospy.loginfo(f"[HybridAgent] Executing action: {env.action_space.get_action(action)}")
+            _, _, done, _ = env.step(action)
+            rospy.loginfo(f"[HybridAgent] Action log probability: {action_logprob}")
+        if done:
+            rospy.loginfo(f"[HybridAgent] Saved policy execution completed in {step} steps.")
+            return True
         else:
-            rospy.logerr("[HybridAgent] No saved policy found.")
-            return None
-
-    def get_saved_policy_path(self) -> Union[str, None]:
-        """
-        Checks if a saved policy exists in the policy directory.
-        """
-
-        # TODO: Make this applicable to more novelties than just the curtain novelty.
-        path = os.path.join(POLICY_DIRECTORY, "CURTAIN_NOVELTY.pth")
-        if not os.path.exists(path):
-            return None
-        return path
+            rospy.loginfo(f"[HybridAgent] Saved policy execution failed after {step} steps")
+            return False
 
 
     def invoke_learning(self, action_name, params):
@@ -214,7 +219,8 @@ class HybridAgent:
         env = RecycleBotSMDP(
             reward_function=reward_function,
             include_local_view=self.include_local_view,
-            failed_operator=failed_op
+            failed_operator=failed_op,
+            include_symbolic_actions=self.include_symbolic_actions
         )
         
         # Get observation + action space sizes
@@ -234,27 +240,19 @@ class HybridAgent:
             eps_clip=0.2
         )
 
-        policy_path = self.get_saved_policy_path()
+        policy_path = self.get_policy_path_for_operator(failed_op)
+        policy_path = os.path.join(POLICY_DIRECTORY, policy_path)
 
-        if policy_path is not None:
-            success = self.run_saved_policy(ppo_model, env)
-            return success
-
-        policy_exists = os.path.exists(policy_path)
-        #For execution of a stored policy, reduce step count. Allow learning to take more steps.
-        max_steps = 25 if policy_exists else self.max_steps
-        # Create LearningAgent
-        learner = LearningAgent(env=env, learner_model=ppo_model, max_steps=max_steps)
-
-        episode = 0
+        policy_exists = policy_path is not None and os.path.exists(policy_path)
 
         if policy_exists:
-            rospy.loginfo(f"[HybridAgent] Loading existing policy from {policy_path}")
-            # Load the existing policy
-            learner.load_policy(policy_path)
-        else:
-            episode = self.resume_incomplete_policy(ppo_model)
-                        
+            success = self.run_saved_policy(ppo_model, env, policy_path)
+            return success
+
+        # Create LearningAgent
+        learner = LearningAgent(env=env, learner_model=ppo_model, max_steps=self.max_steps)
+
+        episode = self.resume_incomplete_policy(ppo_model, failed_op)
 
         if episode == 0:
             demo_count = 0
@@ -270,23 +268,36 @@ class HybridAgent:
         # Now let it learn by itself
         rospy.loginfo(f"[HybridAgent] Self learning episodes:")
         successes = 0
+
+        learning_stats = LearningStats()
         while episode < self.num_episodes:
+            episode_start = rospy.get_time()
             rospy.loginfo(f"[HybridAgent] Episode {episode}:")
-            success = learner.learn()
+            success = learner.learn(stats=learning_stats, episode=episode)
             if success:
                 successes += 1
             episode += 1
             rospy.loginfo(f"[HybridAgent] Episode {episode} completed. Success: {success}")
             try:
-                incomplete_policy_file = self.get_incomplete_policy_file()
-                self.save_incomplete_policy(learner, episode)
+                incomplete_policy_file = self.get_incomplete_policy_file(failed_op)
+                self.save_incomplete_policy(learner, episode, failed_op)
                 if incomplete_policy_file is not None:
                     self.remove_incomplete_policy(incomplete_policy_file)
             except Exception as e:
                 rospy.logerr(f"[HybridAgent] Failed to save incomplete policy: {e}")
-            env.reset()
-
-            raise Exception("Test exception for testing save incomplete policy functionality.")
+            episode_end = rospy.get_time()
+            rospy.loginfo(f"[HybridAgent] Episode {episode} duration: {episode_end - episode_start} seconds")
+            
+            if not success:
+                # It's possible that the episode exhausted its step quota but got the environment
+                # into a state thate if can execute the action in; e.g. moved an obstacle away but
+                # didn't have enough steps left to face the object. In that case, we retry the action.
+                # If it can execute it, consider the episode a success.
+                success = self.retry_failed_action(action_name, params)
+                if success:
+                    successes += 1
+            env.prepare_for_reset()
+            env.prompt_for_learning()
 
         if successes > 0:
             # Save the learned policy
@@ -297,6 +308,32 @@ class HybridAgent:
             self.run()
         else:
             rospy.logerr("[HybridAgent] Learning failed. Aborting.")
+
+        if self.stats_file_path is not None:
+            try:
+                with open(self.stats_file_path, 'w') as stats_file:
+                    learning_stats.write_to_file(stats_file)
+            except Exception as e:
+                rospy.logerr(f"[HybridAgent] Failed to write learning stats to file: {e}")
+
+    def retry_failed_action(self, failed_op_name: str, params: list):
+        """
+        Retries the failed action.
+
+        Arguments:
+        failed_op_name -- The failed operator name.
+        params -- The parameters for the failed operator.
+
+        Returns True if the action succeeds on retry, False otherwise.
+        """
+        rospy.loginfo(f"[HybridAgent] Retrying action {failed_op_name} with params {params}.")
+        try:
+            self.agent.run_action(failed_op_name, list(params))
+            rospy.loginfo(f"[HybridAgent] Action {failed_op_name} succeeded on retry.")
+            return True
+        except ActionExecutionError as e:
+            rospy.logwarn(f"[HybridAgent] Retry for action {failed_op_name} failed: {e}")
+            return False
 
     def find_failed_operator(self, action_name, params):
         """

@@ -26,6 +26,7 @@ class RecycleBotSMDP:
         failed_operator: Action,
         reward_function=None,
         include_local_view=True,
+        include_symbolic_actions=False
     ):
         """
         Initializes the RecycleBotSMDP environment.
@@ -39,7 +40,8 @@ class RecycleBotSMDP:
 
         # Generate grounded symbolic actions
         all_actions = self.generate_grounded_symbolic_actions()
-        self.grounded_actions = self.filter_valid_actions(all_actions)
+        self.grounded_actions = self.filter_valid_actions(all_actions) if include_symbolic_actions else []
+        self.failed_operator = failed_operator
 
         # Initialize ActionSpace
         self.action_space = ActionSpace(
@@ -73,6 +75,30 @@ class RecycleBotSMDP:
         except rospy.ServiceException as e:
             rospy.logerr(f"[PrimitiveClient] Service call failed: {e}")
 
+    def prepare_for_reset(self):
+        input("Resetting robot for new episode. Press Enter key when environment is set for reset.")
+        approach_point = None
+        # Currently hard-coded for curtain novelty
+        if self.failed_operator.name == "pass_through_door":
+            approach_point = "atdoor" 
+        # ...or for bin obstruction novelty
+        elif self.failed_operator.name == "approach" and self.failed_operator.parameters[0] == "bin_1":
+            approach_point = "postdoor"
+        else:
+            rospy.logwarn(f"[RecycleBotSMDP] reset(): Don't know how to automatically reset for operator {self.failed_operator}. Please manually reset the environment.")
+        if approach_point is not None:
+            try:
+                response = self.approach_service(approach_point)
+                if not response.success:
+                    rospy.logerr(f"[RecycleBotSMDP] reset(): Approaching '{approach_point}' was unsuccessful")
+
+            except rospy.ServiceException as e:
+                rospy.logerr(f"[RecycleBotSMDP] reset(): Service call failed: {e}")
+
+
+    def prompt_for_learning(self):
+      input("Resetting complete. Press Enter when robot should start learning again.")
+
     def reset(self):
         """
         Resets the state of the robot in order to prepare for starting a new episode.
@@ -81,28 +107,18 @@ class RecycleBotSMDP:
         complete its reset (e.g. moving curtain away).
         """
 
-        input("Resetting robot for new episode. Press Enter key when environment is set for reset.")
-        # Currently hard-coded for curtain novelty
-        try:
-            response = self.approach_service("atdoor")
-            if not response.success:
-                rospy.logerr(f"[RecycleBotSMDP] reset(): Approaching 'atdoor' was unsuccessful")
+        self.prepare_for_reset()
+        self.prompt_for_learning()
 
-        except rospy.ServiceException as e:
-            rospy.logerr(f"[RecycleBotSMDP] reset(): Service call failed: {e}")
-
-        input("Resetting complete. Press Enter when robot should start learning again.")
-    
+  
     def step(self, action_id):
         """
         Executes the action and returns (obs, reward, done, info)
         """
 
         action = self.action_space.get_action(action_id)
-        if action["type"] == "primitive" and action["name"] == "move_forward":
-            if self.check_forward_collision():
-                rospy.loginfo("[RecycleBotSMDP] move_forward action would result in collision; not executing action")
-                return self.observation_space.get_observation(), 0.0, False, {}
+        if (self.is_noop_action(action)):
+            return self.observation_space.get_observation(), 0.0, False, {}
 
         executed = self.action_space.execute_action(
             action_id,
@@ -198,6 +214,27 @@ class RecycleBotSMDP:
 
             valid.append((name, params))
         return valid
+    
+    def is_noop_action(self, action):
+        """
+        Checks if the action is a no-op (does nothing).
+        """
+        
+        if action["type"] == "primitive" and action["name"] == "move_forward":
+            if self.check_forward_collision():
+                rospy.loginfo("[RecycleBotSMDP] move_forward action would result in collision; not executing action")
+                return True
+        
+        # Prevent any action that would take the robot into room 1
+        # TODO: Eliminate this code
+        if action["type"] == "symbolic":
+            if  action["name"] == "approach":
+                room = action["params"][1]  # The room to approach
+                if room == "room_1":
+                    rospy.loginfo("[RecycleBotSMDP] approach action would take robot into room 1; not executing action")
+                    return True
+
+        return False
 
 def main():
     rospy.init_node("recyclebot_node", anonymous=True)

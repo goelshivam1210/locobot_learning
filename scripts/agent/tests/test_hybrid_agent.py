@@ -3,6 +3,7 @@
 #NOTE: the -u in the shebang above makes the script output unbuffered when not writing to 
 #a TTY (e.g. when using tee or > redirect). If that's no longer needed, it can be removed.
 
+from typing import Union
 import sys
 import os
 
@@ -13,7 +14,7 @@ from HybridAgent import HybridAgent
 import rospy
 
 
-def test_hybrid_agent(include_local_view=True, num_demonstrations: int = 0, test_only: bool = False):
+def test_hybrid_agent(include_local_view=True, num_demonstrations: int = 0, test_only: bool = False, stats_file: Union[str, None] = None):
     rospy.init_node("test_hybrid_agent", anonymous=True)
 
     # Path to PDDL domain file
@@ -36,7 +37,10 @@ def test_hybrid_agent(include_local_view=True, num_demonstrations: int = 0, test
         objects,
         num_demonstrations=num_demonstrations,
         include_local_view=include_local_view,
-        max_steps=25 if test_only else 50,
+        num_episodes=50,
+        max_steps=50,
+        include_symbolic_actions=False,
+        stats_file_path=stats_file
     )
 
     if test_only:
@@ -59,16 +63,23 @@ def test_hybrid_agent(include_local_view=True, num_demonstrations: int = 0, test
     rospy.loginfo("[test_hybrid_agent] Agent run completed.")
 
 if __name__ == "__main__":
+    from datetime import datetime
     from argparse import ArgumentParser
     parser = ArgumentParser()
+
+    current_date = datetime.now().strftime("%Y%m%d")
+
+    default_stats_file = os.path.abspath(os.path.join(os.path.dirname(__file__), f"./logs/hybrid_agent_stats_{current_date}.csv"))
 
     parser.add_argument("-d", "--demonstrations", type=int, nargs="?", help="Number of human demonstrations to request before the agent starts learning", default=0)
     parser.add_argument("--no-local-view", action="store_false", help="Omit local view grid in the agent's observations; include only is_obstructedd bit for subsymbolic state.")
     parser.add_argument("--test_only", action="store_true", help="Run the agent in test mode, without updating weights.")
+    parser.add_argument("-s", "--stats-file", type=str, default=default_stats_file, help="Path to a file where learning statistics will be appended after each episode.")
     args = parser.parse_args()
 
     test_hybrid_agent(
         include_local_view=args.no_local_view,
         num_demonstrations=args.demonstrations,
+        stats_file=args.stats_file,
         test_only=args.test_only
     )
