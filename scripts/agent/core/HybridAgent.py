@@ -267,16 +267,21 @@ class HybridAgent:
 
         # Now let it learn by itself
         rospy.loginfo(f"[HybridAgent] Self learning episodes:")
-        successes = 0
 
         learning_stats = LearningStats()
+        if self.stats_file_path is not None:
+            try:
+                with open(self.stats_file_path, 'r+') as stats_file:
+                    learning_stats.load_successes_from_file(stats_file)
+            except Exception as e:
+                rospy.logerr(f"[HybridAgent] Failed to load successes from file: {e}")
+
         while episode < self.num_episodes:
             episode_start = rospy.get_time()
             rospy.loginfo(f"[HybridAgent] Episode {episode}:")
-            success = learner.learn(stats=learning_stats, episode=episode)
+            success = learner.learn(stats=learning_stats, episode=episode, stats_file_path=self.stats_file_path)
             if success:
-                successes += 1
-            episode += 1
+                learning_stats.successes += 1
             rospy.loginfo(f"[HybridAgent] Episode {episode} completed. Success: {success}")
             try:
                 incomplete_policy_file = self.get_incomplete_policy_file(failed_op)
@@ -295,13 +300,17 @@ class HybridAgent:
                 # If it can execute it, consider the episode a success.
                 success = self.retry_failed_action(action_name, params)
                 if success:
-                    successes += 1
+                    learning_stats.successes += 1
+
+            # log an episode summary for the final success counter
+            learning_stats.log_step(episode, -1, -1, -1)
+            episode += 1
             env.prepare_for_reset()
             env.prompt_for_learning()
 
-        if successes > 0:
+        if learning_stats.successes > 0:
             # Save the learned policy
-            rospy.loginfo(f"[HybridAgent] {successes}/{episode} episodes succeeded ({(successes/episode) * 100}%). Retrying plan.")
+            rospy.loginfo(f"[HybridAgent] {learning_stats.successes}/{episode} episodes succeeded ({(learning_stats.successes/episode) * 100}%). Retrying plan.")
             learner.save_policy(policy_path)
             self.remove_incomplete_policy(None)
             rospy.loginfo(f"[HybridAgent] Policy saved to path: {policy_path}")
@@ -309,12 +318,12 @@ class HybridAgent:
         else:
             rospy.logerr("[HybridAgent] Learning failed. Aborting.")
 
-        if self.stats_file_path is not None:
-            try:
-                with open(self.stats_file_path, 'w') as stats_file:
-                    learning_stats.write_to_file(stats_file)
-            except Exception as e:
-                rospy.logerr(f"[HybridAgent] Failed to write learning stats to file: {e}")
+        # if self.stats_file_path is not None:
+        #     try:
+        #         with open(self.stats_file_path, 'w') as stats_file:
+        #             learning_stats.write_to_file(stats_file)
+        #     except Exception as e:
+        #         rospy.logerr(f"[HybridAgent] Failed to write learning stats to file: {e}")
 
     def retry_failed_action(self, failed_op_name: str, params: list):
         """
