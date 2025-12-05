@@ -25,7 +25,7 @@ class LearningAgent:
         self.learner: PPO = learner_model
         self.max_steps = max_steps
 
-    def learn(self, stats: LearningStats, episode: int, demonstration=False) -> bool:
+    def learn(self, stats: LearningStats, episode: int, demonstration=False, stats_file_path=None) -> bool:
         """
         Run PPO learning loop until recovery is achieved (done=True) or max_steps reached.
         """
@@ -49,6 +49,13 @@ class LearningAgent:
             next_obs, reward, done, info = self.env.step(action)
             step_end = rospy.get_time()
             stats.log_step(episode, step_count, reward, duration=step_end - step_start)
+            if stats_file_path is not None:
+                try:
+                    with open(stats_file_path, 'a+') as stats_file:
+                        stats.write_step_to_file(stats_file, episode, step_count, reward, duration=step_end - step_start)
+                        rospy.loginfo(f"[LearningAgent] Step {step_count} written to stats file.")
+                except Exception as e:
+                    rospy.logerr(f"[LearningAgent] Failed to write learning stats step {step_count} to file: {e}")
             self.learner.buffer.rewards.append(reward)
             self.learner.buffer.is_terminals.append(done)
 
