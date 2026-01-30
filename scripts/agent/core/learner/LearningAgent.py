@@ -4,6 +4,7 @@ from typing import Union, Tuple
 import rospy
 import sys
 import os
+import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'environment')))
 from RecycleBotSMDP import RecycleBotSMDP  # Import the RecycleBotSMDP environment
 from .PPO import PPO  # Import the PPO learner model
@@ -15,17 +16,22 @@ class LearningAgent:
         self,
         env: RecycleBotSMDP,
         learner_model: PPO,
-        max_steps: int
+        max_steps: int,
+        run_dir: str,
     ):
         """
         env: instance of RecycleBotSMDP
         learner_model: instance of PPO
+        max_steps: maximum steps per learning episode
+        run_dir: directory path to save stats and policies
         """
         self.env = env
         self.learner: PPO = learner_model
         self.max_steps = max_steps
+        self.run_dir = run_dir
+        self.stats_file_path = os.path.join(self.run_dir, "stats.csv")
 
-    def learn(self, stats: LearningStats, episode: int, demonstration=False, stats_file_path=None) -> bool:
+    def learn(self, stats: LearningStats, episode: int, demonstration=False) -> bool:
         """
         Run PPO learning loop until recovery is achieved (done=True) or max_steps reached.
         """
@@ -37,36 +43,41 @@ class LearningAgent:
 
         action_dict = {action_id: f"{action['name']}({action['params'] if action['params'] else ''})" for action_id, action in enumerate(self.env.action_space.action_list)}
 
-        while not done and step_count < self.max_steps and not rospy.is_shutdown():
-            rospy.loginfo(f"[LearningAgent] Actions: {action_dict}")
-            step_start = rospy.get_time()
-            if demonstration:
-                action = self.get_demonstration_action()
-                self.learner.update_buffer(obs, action)
-            else:
-                action, action_logprob = self.learner.select_action(obs)
-                self.learner.update_buffer(obs, action, action_logprob)
-            next_obs, reward, done, info = self.env.step(action)
-            step_end = rospy.get_time()
-            stats.log_step(episode, step_count, reward, duration=step_end - step_start)
-            if stats_file_path is not None:
-                try:
-                    with open(stats_file_path, 'a+') as stats_file:
-                        stats.write_step_to_file(stats_file, episode, step_count, reward, duration=step_end - step_start)
-                        rospy.loginfo(f"[LearningAgent] Step {step_count} written to stats file.")
-                except Exception as e:
-                    rospy.logerr(f"[LearningAgent] Failed to write learning stats step {step_count} to file: {e}")
-            self.learner.buffer.rewards.append(reward)
-            self.learner.buffer.is_terminals.append(done)
+        if not os.path.exists(self.stats_file_path):
+            os.makedirs(os.path.dirname(self.stats_file_path), exist_ok=True)
+                
+        with open(self.stats_file_path, 'a+') as stats_file:
+            while not done and step_count < self.max_steps and not rospy.is_shutdown():
+                rospy.loginfo(f"[LearningAgent] Actions: {action_dict}")
+                step_start = rospy.get_time()
+                if demonstration:
+                    action = self.get_demonstration_action()
+                    self.learner.update_buffer(obs, action)
+                else:
+                    action, action_logprob = self.learner.select_action(obs)
+                    self.learner.update_buffer(obs, action, action_logprob)
+                next_obs, reward, done, info = self.env.step(action)
+                step_end = rospy.get_time()
+                stats.write_step_to_file(
+                    file=stats_file,
+                    episode=episode,
+                    step=step_count,
+                    reward=reward,
+                    duration=step_end - step_start,
+                    action=action_dict[action]
+                )
+                rospy.loginfo(f"[LearningAgent] Step {step_count} written to stats file.")
+                self.learner.buffer.rewards.append(reward)
+                self.learner.buffer.is_terminals.append(done)
 
-            obs = next_obs
-            step_count += 1
+                obs = next_obs
+                step_count += 1
 
-            rospy.loginfo(f"[LearningAgent] Step {step_count}: reward={reward}, done={done}")
+                rospy.loginfo(f"[LearningAgent] Step {step_count}: reward={reward}, done={done}")
 
-            # Optionally log info
-            if info.get("failure"):
-                rospy.logwarn(f"[LearningAgent] Info: {info}")
+                # Optionally log info
+                if info.get("failure"):
+                    rospy.logwarn(f"[LearningAgent] Info: {info}")
 
         # Trigger PPO update after trajectory collected
         avg_loss, avg_advantage = self.learner.update()
