@@ -4,7 +4,7 @@ from typing import Union
 import sys
 import os
 import rospy
-from io import TextIOBase
+import json
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'environment')))
@@ -25,11 +25,11 @@ from reward_function import RewardFunction
 from RecycleBotSMDP import RecycleBotSMDP
 from learner.PPO import PPO
 
-POLICY_DIRECTORY = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'policy'))
-INCOMPLETE_POLICY_DIRECTORY = os.path.join(POLICY_DIRECTORY, "incomplete")
 
 DEFAULT_MAX_STEPS = 25
 DEFAULT_NUM_EPISODES = 30
+
+COMPLETED_POLICY_DIRECTORY = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "policies"))
 
 
 class HybridAgent:
@@ -37,29 +37,43 @@ class HybridAgent:
         self,
         domain_file,
         objects,
+        run_dir: str,
         max_retries=3,
         num_demonstrations=0,
         include_local_view=True,
         max_steps: int = DEFAULT_MAX_STEPS,
         num_episodes: int = DEFAULT_NUM_EPISODES,
         include_symbolic_actions=False,
-        stats_file_path: Union[str, None] = None,
+        policy_checkpoint_frequency: int = 5,
     ):
         """
         Initializes the hybrid agent with planning and learning capabilities.
+        domain_file: Path to the PDDL domain file.
+        objects: Dictionary of objects in the environment.
+        run_dir: Directory to save learning data.
+        max_retries: Maximum retries for failed actions.
+        num_demonstrations: Number of human demonstrations before learning.
+        include_local_view: Whether to include local view in the environment.
+        max_steps: Maximum steps per learning episode.
+        num_episodes: Number of learning episodes to run.
+        include_symbolic_actions: Whether to include symbolic actions in the environment.
+        policy_checkpoint_frequency: Frequency (in episodes) to save policy checkpoints.
         """
         self.planner = Planner(domain_file)
         self.actions = PDDLActions()
         self.predicates = PDDLPredicates()
         self.agent = Agent(self.planner, self.actions, self.predicates)
         self.objects = objects
+        self.run_dir = run_dir
         self.max_retries = max_retries
         self.num_demonstrations = num_demonstrations
         self.include_local_view = include_local_view
         self.max_steps = max_steps
         self.num_episodes = num_episodes
         self.include_symbolic_actions = include_symbolic_actions
-        self.stats_file_path = stats_file_path
+        self.stats_file_path = os.path.join(self.run_dir, "stats.csv")
+        self.policy_checkpoint_frequency = policy_checkpoint_frequency
+        self.base_policy_directory = os.path.join(self.run_dir, "policies")
 
     def run(self):
         """
@@ -76,27 +90,48 @@ class HybridAgent:
         if success == True:
             rospy.loginfo("[HybridAgent] Plan executed successfully.")
 
-    def get_policy_path_for_operator(self, operator, episode: Union[int, None] = None) -> str:
+    def get_filename_for_operator_episode(self, operator, episode: Union[int, None] = None) -> str:
         """
-        Returns the path to the policy file for a given operator.
+        Returns the filename for the policy file for a given operator and episode.
         """
         param_string = "_".join(operator.parameters) if operator.parameters else "_"
         episode_string = f"episode_{episode}" if episode is not None else ""
-        path = os.path.join(f"{operator.name}/{param_string}{episode_string}.pth")
-        return path
+        filename = f"{param_string}_{episode_string}.pth"
+        return filename
+
+    
+    def get_policy_directory(self, operator) -> str:
+        """
+        Returns the directory path for the given operator's policies.
+        """
+        return os.path.join(self.base_policy_directory, operator.name)
+
+    def get_completed_policy_file_path(self, failed_op) -> str:
+        """
+        Returns the path to the completed policy file, if it exists.
+        """
+        
+        # File path is of the form "approach/bin_1_room_2_doorway_1.pth"
+        params_str = "_".join(failed_op.parameters) if failed_op.parameters else ""
+        return os.path.join(
+            COMPLETED_POLICY_DIRECTORY,
+            failed_op.name + params_str + ".pth",
+        )
 
 
     def get_incomplete_policy_file(self, failed_op):
         """
         Returns the path to the incomplete policy file, if it exists.
         """
-        op_directory = os.path.join(INCOMPLETE_POLICY_DIRECTORY, failed_op.name)
+        op_directory = self.get_policy_directory(failed_op)
         if not os.path.exists(op_directory):
             return None
         files = os.listdir(op_directory)
-        incomplete_policy_file = next((file for file in files if file.endswith('.pth')), None)
-        if incomplete_policy_file is None:
+        policy_files = [file for file in files if file.endswith('.pth')]
+        if len(policy_files) == 0:
             return None
+        policy_files.sort(key=lambda x: os.path.getmtime(os.path.join(op_directory, x)), reverse=True)
+        incomplete_policy_file = policy_files[0]
         return os.path.join(op_directory, incomplete_policy_file)
 
 
@@ -118,8 +153,7 @@ class HybridAgent:
             rospy.logerr(f"[HybridAgent] {incomplete_policy_file} is an invalid incomplete policy file name format. Starting learning from beginning.")
             return 0
         episode_number = int(episode_number.group(1))
-        path = os.path.join(INCOMPLETE_POLICY_DIRECTORY, incomplete_policy_file)
-        model.load(path)
+        model.load(incomplete_policy_file)
         rospy.loginfo(f"[HybridAgent] Resuming learning from episode {episode_number + 1} with policy {incomplete_policy_file}")
         return episode_number + 1
         
@@ -128,11 +162,13 @@ class HybridAgent:
         Saves the current policy as an incomplete policy.
         """
 
-        policy_path = self.get_policy_path_for_operator(failed_op, episode=episode)
-        policy_path = os.path.join(INCOMPLETE_POLICY_DIRECTORY, policy_path)
-        if not os.path.exists(INCOMPLETE_POLICY_DIRECTORY):
-            os.makedirs(os.path.dirname(policy_path))
+        filename = self.get_filename_for_operator_episode(failed_op, episode=episode)
+        directory = self.get_policy_directory(failed_op)
 
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        policy_path = os.path.join(directory, filename)
+        rospy.loginfo(f"[HybridAgent] Saving incomplete policy for episode {episode} at {policy_path}")
 
         learner.save_policy(policy_path)
         rospy.loginfo(f"[HybridAgent] Saved incomplete policy for episode {episode} at {policy_path}")
@@ -140,10 +176,10 @@ class HybridAgent:
 
     def remove_incomplete_policy(self, incomplete_policy_file: Union[str, None]):
         """
-        Removes the incomplete policy directory if it exists.
+        Removes the incomplete policy file if it exists.
         """
 
-        full_path = os.path.join(INCOMPLETE_POLICY_DIRECTORY, incomplete_policy_file) if incomplete_policy_file else None
+        full_path = os.path.join(self.base_policy_directory, incomplete_policy_file) if incomplete_policy_file else None
         if full_path is not None:
             if not os.path.exists(full_path):
                 rospy.logwarn(f"[HybridAgent] Incomplete policy file {full_path} does not exist.")
@@ -151,18 +187,13 @@ class HybridAgent:
             try:
                 os.remove(full_path)
                 rospy.loginfo(f"[HybridAgent] Removed incomplete policy file: {full_path}")
-                files = os.listdir(INCOMPLETE_POLICY_DIRECTORY)
+                files = os.listdir(os.path.dirname(full_path))
                 rospy.loginfo(f"[HybridAgent] Remaining files in incomplete policy directory: {files}")
                 if files and len(files) > 0:
                     return
                     # if the directory is empty, coninue below to remove it
             except OSError as e:
-                rospy.logerr(f"[HybridAgent] Failed to remove incomplete policy file: {e}")
-        try:
-            os.rmdir(INCOMPLETE_POLICY_DIRECTORY)
-            rospy.loginfo("[HybridAgent] Removed incomplete policy directory.")
-        except OSError as e:
-            rospy.logerr(f"[HybridAgent] Failed to remove incomplete policy directory: {e}")
+                rospy.logerr(f"[HybridAgent] Failed to remove incomplete policy file {full_path}: {e}")
     
     def run_saved_policy(self, model: PPO, env: RecycleBotSMDP, policy_path: str) -> Union[bool, None]:
         """
@@ -190,6 +221,20 @@ class HybridAgent:
         else:
             rospy.loginfo(f"[HybridAgent] Saved policy execution failed after {step} steps")
             return False
+    
+
+    def write_parameters_json(self, params: dict):
+        """
+        Write the parameters of the learning agent to a JSON file in the run directory.
+        """
+        params_file_path = os.path.join(self.run_dir, "learning_agent_params.json")
+
+        if os.path.exists(params_file_path):
+            rospy.loginfo(f"[HybridAgent] Parameters file already exists at {params_file_path}, skipping write.")
+            return
+        with open(params_file_path, 'w') as f:
+            json.dump(params, f, indent=4)
+        rospy.loginfo(f"[HybridAgent] Parameters written to {params_file_path}")
 
 
     def invoke_learning(self, action_name, params):
@@ -229,19 +274,22 @@ class HybridAgent:
 
         rospy.loginfo(f"Action space size: {action_dim}")
 
-        # Create PPO learner
-        ppo_model = PPO(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            lr_actor=0.0003,
-            lr_critic=0.001,
-            gamma=0.99,
-            K_epochs=4,
-            eps_clip=0.2
-        )
+        ppo_args = {
+            "state_dim": state_dim,
+            "action_dim": action_dim,
+            "lr_actor": 0.0003,
+            "lr_critic": 0.001,
+            "gamma": 0.99,
+            "K_epochs": 2,
+            "eps_clip": 0.2
+        }
 
-        policy_path = self.get_policy_path_for_operator(failed_op)
-        policy_path = os.path.join(POLICY_DIRECTORY, policy_path)
+        # Create PPO learner
+        ppo_model = PPO(**ppo_args)
+
+        self.write_parameters_json(ppo_args)
+
+        policy_path = self.get_completed_policy_file_path(failed_op)
 
         policy_exists = policy_path is not None and os.path.exists(policy_path)
 
@@ -250,7 +298,12 @@ class HybridAgent:
             return success
 
         # Create LearningAgent
-        learner = LearningAgent(env=env, learner_model=ppo_model, max_steps=self.max_steps)
+        learner = LearningAgent(
+            env=env,
+            learner_model=ppo_model,
+            max_steps=self.max_steps,
+            run_dir=self.run_dir,
+        )
 
         episode = self.resume_incomplete_policy(ppo_model, failed_op)
 
@@ -269,24 +322,22 @@ class HybridAgent:
         rospy.loginfo(f"[HybridAgent] Self learning episodes:")
 
         learning_stats = LearningStats()
-        if self.stats_file_path is not None:
-            try:
-                with open(self.stats_file_path, 'r+') as stats_file:
-                    learning_stats.load_successes_from_file(stats_file)
-            except Exception as e:
-                rospy.logerr(f"[HybridAgent] Failed to load successes from file: {e}")
 
         while episode < self.num_episodes:
             episode_start = rospy.get_time()
             rospy.loginfo(f"[HybridAgent] Episode {episode}:")
-            success = learner.learn(stats=learning_stats, episode=episode, stats_file_path=self.stats_file_path)
+            success = learner.learn(
+                stats=learning_stats,
+                episode=episode,
+            )
             if success:
                 learning_stats.successes += 1
             rospy.loginfo(f"[HybridAgent] Episode {episode} completed. Success: {success}")
             try:
                 incomplete_policy_file = self.get_incomplete_policy_file(failed_op)
                 self.save_incomplete_policy(learner, episode, failed_op)
-                if incomplete_policy_file is not None:
+                # Remove incomplete policy, if this episode is not one of the checkpoint episodes
+                if incomplete_policy_file is not None and episode % self.policy_checkpoint_frequency != 0:
                     self.remove_incomplete_policy(incomplete_policy_file)
             except Exception as e:
                 rospy.logerr(f"[HybridAgent] Failed to save incomplete policy: {e}")
@@ -302,8 +353,6 @@ class HybridAgent:
                 if success:
                     learning_stats.successes += 1
 
-            # log an episode summary for the final success counter
-            learning_stats.log_step(episode, -1, -1, -1)
             episode += 1
             env.prepare_for_reset()
             env.prompt_for_learning()
