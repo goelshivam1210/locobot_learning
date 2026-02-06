@@ -2,6 +2,48 @@
 
 This level contains the code for a hybrid agent system integrating PDDL planning and reinforcement learning. Below is an overview of the key components, their relationships, and how they fit into the overall system.
 
+## Tests
+
+The test script `test_hybrid_agent.py` runs the planning and learning process in `HybridAgent.py`. To run it, use the following command:
+
+```bash
+python test_hybrid_agent.py
+```
+
+### Arguments
+
+The following arguments can be passed to the test script:
+
+- `--demonstrations`: Number of human demonstrations to run before the robot starts learning. Optional, default is 0.
+- `--test_only`: If set, the script will only run test episodes using a saved policy without performing any learning. Optional, default is False.
+- `--run_dir`: Directory to save logs and models. Optional, defaults to the current date, in YYYY-MM-DD format. You can pass an existing run ID here to continue training from a previous run. In that case, the script will look for the latest checkpoint in that directory and load it.
+- `--no-local-view`: If set, the agent will not include local view observations in the learning process. Optional, default is False. This is currently untested and should be considered unsupported.
+
+
+### Outputs
+
+The run directory will contain various artifacts from the training:
+
+- `learning_agent_params.json`: A JSON file containing the parameters used for the learning agent.
+- `stats.csv`: A CSV file logging episode statistics such as rewards, success rates, and episode durations.
+- `policies/`: A directory containing saved policy checkpoints. Each checkpoint is saved every `policy_checkpoint_frequency` episodes. It will also contain the latest incomplete policy, which is updated after every episode, allowing you to resume training from the most recent state in case of interruptions.
+
+
+### Test mode
+
+If you run the script with the `--test_only` flag, it will skip the learning process if there is a saved policy for the failed operator in the `policies/` directory. Instead, it will directly run the saved policy for a maximum of `max_steps` steps. If the saved policy succeeds, it will log the success and move on to the next episode. If it fails or if there is no saved policy, it will log the failure and skip to the next episode without attempting to learn a new policy. This allows you to evaluate the performance of previously learned policies without performing any new learning. The number of test episodes is hard coded in `test_hybrid_agent.py` if `--test_only` is set.
+
+
+### Using saved policies
+
+There is no automated process for putting a saved policy into the `policies/` directory. Instead, you will have to manually copy the policy checkpoint file you want to use from the run directory's `policies/` directory and rename it to change the `_episode_XX.pth` to just `.pth`. For example, if you have a checkpoint file named `room_1_room_2_doorway_1_episode_10.pth`, you would copy it and rename the copy to `room_1_room_2_doorway_1.pth`. The script will look for `room_1_room_2_doorway_1.pth` when running in test mode. Be sure to place the policy file into the directory corresponding to the failed operator (e.g. `pass_through_door/`). The run directory has the proper directory structure for this.
+
+For example:
+
+runs/2026-01-01/policies/pass_through_door/room_1_room_2_doorway_1_episode_10.pth  --> copy and rename to --> locobot_learning/policies/pass_through_door/room_1_room_2_doorway_1.pth
+
+Note that the script will start learning if it encounters a failed operator for which there is no saved policy.
+
 ## Directory Structure
 
 ```
